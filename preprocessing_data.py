@@ -100,7 +100,7 @@ def preprocessing_heartbeat_mit(n_data_list=None):
     heartbeat_data_list = heartbeat_data.tolist()
 
     # Save the proprocessed data
-    file_name = [".//data//hearbeat_mit_{}.pkl".format(i)
+    file_name = [".//data//heartbeat_mit_{}.pkl".format(i)
                  for i in n_data_list]
     file_processor = LoadSave()
     for ind, item in enumerate(n_data_list):
@@ -122,7 +122,7 @@ def preprocessing_heartbeat_ptb(n_data_list=None):
     heartbeat_data_list = heartbeat_data.tolist()
 
     # Save the proprocessed data
-    file_name = [".//data//hearbeat_ptbdb_{}.pkl".format(i)
+    file_name = [".//data//heartbeat_ptbdb_{}.pkl".format(i)
                   for i in n_data_list]
     file_processor = LoadSave()
     for ind, item in enumerate(n_data_list):
