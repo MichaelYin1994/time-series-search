@@ -38,6 +38,14 @@ def get_z_normalized_ts(ts=None):
         return (ts - mean_val) / std_val
 
 
+def get_jaccard_dist(set_x=None, set_y=None):
+    set_x, set_y = set(set_x), set(set_y)
+    union_set = set_x.union(set_y)
+    intersection_set = set_x.intersection(set_y)
+
+    return len(intersection_set)/len(union_set)
+
+
 def plot_experiment_time_cost(experiment_res_list=None):
     """Plot the time cost of multi-experiment results."""
     if not isinstance(experiment_res_list, list):
@@ -105,8 +113,6 @@ def plot_top_n_similar_ts(dataset=None, experiment_res=None,
 
 
 if __name__ == "__main__":
-    N_SEARCH = 50
-    SEARCH_TOP_K = 50
     PATH = ".//data//"
     dataset_name = "heartbeat_mit"
     file_names = os.listdir(PATH)
@@ -115,8 +121,9 @@ if __name__ == "__main__":
     file_names = sorted(file_names, key=lambda s: int(s.split("_")[-1][:-4]))
 
     dataset = [load_data(PATH+name) for name in file_names]
-    experiment_res = load_data(path_name=".//data_tmp//" + dataset_name + "_searching_res.pkl")
+    experiment_res_list = [load_data(path_name=".//data_tmp//" + dataset_name + "_searching_res.pkl"),
+                           load_data(path_name=".//data_tmp//" + dataset_name + "_optimized_searching_res.pkl")]
 
-    plot_experiment_time_cost([experiment_res])
+    plot_experiment_time_cost(experiment_res_list)
     # plot_top_n_similar_ts(dataset[-1], experiment_res, dataset_name=file_names[-1],
     #                       ts_query_ind=295, n=5)
