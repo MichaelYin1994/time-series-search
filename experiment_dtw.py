@@ -101,7 +101,7 @@ if __name__ == "__main__":
         # STEP 3: Save the SEARCH_TOP_K results in experiment_res
         experiment_res[name] = search_res
 
-    # file_processor = LoadSave()
-    # new_file_name = ".//data_tmp//" + dataset_name + "_searching_res.pkl"
-    # file_processor.save_data(path=new_file_name,
-    #                          data=experiment_res)
+    file_processor = LoadSave()
+    new_file_name = ".//data_tmp//" + dataset_name + "_searching_res.pkl"
+    file_processor.save_data(path=new_file_name,
+                              data=experiment_res)
