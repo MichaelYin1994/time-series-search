@@ -11,12 +11,16 @@ from time import time
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from tslearn.metrics import dtw
+from tslearn.metrics import dtw, lb_keogh, lb_envelope
 import _ucrdtw
 from utils import LoadSave
 
 sns.set(style="ticks", font_scale=1.2, palette='deep', color_codes=True)
 np.random.seed(2019)
+
+
+def lb_kim():
+    pass
 
 
 def load_data(path_name=None):
@@ -98,7 +102,7 @@ if __name__ == "__main__":
         # STEP 3: Save the SEARCH_TOP_K results in experiment_res
         experiment_res[name] = search_res
 
-    file_processor = LoadSave()
-    new_file_name = ".//data_tmp//" + dataset_name + "_optimized_searching_res.pkl"
-    file_processor.save_data(path=new_file_name,
-                              data=experiment_res)
+    # file_processor = LoadSave()
+    # new_file_name = ".//data_tmp//" + dataset_name + "_ucrdtw_searching_res.pkl"
+    # file_processor.save_data(path=new_file_name,
+    #                           data=experiment_res)

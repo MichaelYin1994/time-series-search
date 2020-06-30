@@ -78,7 +78,7 @@ void push_back(struct deque *d, int v)
 {
     d->dq[d->r] = v;
     d->r--;
-    if (d->r < 0)
+    if (d->r < 0) /// Check whether the rear pointer out of boundary(OOB), if OOB, reset r to capacity-1
         d->r = d->capacity-1;
     d->size++;
 }
@@ -109,7 +109,7 @@ int front(struct deque *d)
     return d->dq[aux];
 }
 
-/// Get the value at the last position of the circular queueint back(struct deque *d)
+/// Get the value at the last position of the circular queueint back(struct deque *d)(Maybe the rear(r) element?)
 int back(struct deque *d)
 {
     int aux = (d->r+1)%d->capacity;
@@ -125,6 +125,9 @@ int empty(struct deque *d)
 /// Finding the envelop of min and max value for LB_Keogh
 /// Implementation idea is intoruduced by Danial Lemire in his paper
 /// "Faster Retrieval with a Two-Pass Dynamic-Time-Warping Lower Bound", Pattern Recognition 42(9), 2009.
+/// r: constrained window size
+/// l: lower envelop(double array), u: upper envelop(double array)
+/// t: query times seies(double array)
 void lower_upper_lemire(double *t, int len, int r, double *l, double *u)
 {
     struct deque du, dl;
@@ -142,13 +145,13 @@ void lower_upper_lemire(double *t, int len, int r, double *l, double *u)
             u[i-r-1] = t[front(&du)];
             l[i-r-1] = t[front(&dl)];
         }
-        if (t[i] > t[i-1])
+        if (t[i] > t[i-1]) /// Upper hill
         {
             pop_back(&du);
             while (!empty(&du) && t[i] > t[back(&du)])
                 pop_back(&du);
         }
-        else
+        else  /// Down hill
         {
             pop_back(&dl);
             while (!empty(&dl) && t[i] < t[back(&dl)])
@@ -403,28 +406,42 @@ int main(  int argc , char *argv[] )
     int EPOCH = 100000;
 
     /// If not enough input, display an error.
-    if (argc<=3)
-        error(4);
+    // if (argc<=3)
+    //     error(4);
 
     /// read size of the query
-    if (argc>3)
-        m = atol(argv[3]);
+    // if (argc>3)
+    //     m = atol(argv[3]);
+    m = 128;
 
     /// read warping windows
-    if (argc>4)
-    {   double R = atof(argv[4]);
-        if (R<=1)
-            r = floor(R*m);
-        else
-            r = floor(R);
-    }
+    // if (argc>4)
+    // {   double R = atof(argv[4]);
+    //     if (R<=1)
+    //         r = floor(R*m);
+    //     else
+    //         r = floor(R);
+    // }
+    double R = 0.05;
+    if (R <= 1)
+        r = floor(R * m);
+    else
+        r = floor(R);
 
-    fp = fopen(argv[1],"r");
-    if( fp == NULL )
+    // fp = fopen(argv[1],"r");
+    // if( fp == NULL )
+    //     error(2);
+    fp = fopen("Data.txt", "r");
+    if(fp == NULL)
+        // fclose(fp);
         error(2);
 
-    qp = fopen(argv[2],"r");
-    if( qp == NULL )
+    // qp = fopen(argv[2],"r");
+    // if( qp == NULL )
+    //     error(2);
+    qp = fopen("Query.txt", "r");
+    if(qp == NULL)
+        // fclose(qp);
         error(2);
 
     /// start the clock
@@ -508,7 +525,7 @@ int main(  int argc , char *argv[] )
     j = 0;
     ex = ex2 = 0;
 
-    while(fscanf(qp,"%lf",&d) != EOF && i < m)
+    while(fscanf(qp, "%lf", &d) != EOF && i < m)
     {
         ex += d;
         ex2 += d*d;

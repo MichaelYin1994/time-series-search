@@ -54,7 +54,6 @@ def plot_experiment_time_cost(experiment_res_list=None):
     # Plot 1: Average total searching time of each ts
     fig, ax = plt.subplots(figsize=(8, 5))
     for ind, experiment_res in enumerate(experiment_res_list):
-
         file_name_keys = list(experiment_res.keys())
         test_sample_size_list, mean_time_spend_list, std_time_spend_list = [], [], []
         for name in file_name_keys:
@@ -73,17 +72,24 @@ def plot_experiment_time_cost(experiment_res_list=None):
                     label="baseline")
         else:
             ax.plot(test_sample_size_list, mean_time_spend_list, marker="o",
-                    markersize=5, linewidth=1.6, linestyle="-", color="k")
-        ax.fill_between(test_sample_size_list,
-                        np.array(mean_time_spend_list) - np.array(std_time_spend_list),
-                        np.array(mean_time_spend_list) + np.array(std_time_spend_list),
-                        alpha=0.4, color="g")
+                    markersize=5, linewidth=1.6, linestyle="-", color="k",
+                    label="Optimized {}".format(ind))
+        # ax.fill_between(test_sample_size_list,
+        #                 np.array(mean_time_spend_list) - np.array(std_time_spend_list),
+        #                 np.array(mean_time_spend_list) + np.array(std_time_spend_list),
+        #                 alpha=0.4, color="g")
         ax.tick_params(axis="both", labelsize=10, rotation=0)
         ax.set_xlim(0, max(test_sample_size_list))
         ax.set_ylim(0, )
         ax.legend(fontsize=10)
         ax.grid(True)
+
     return None
+
+
+def plot_rank_preformance(experiment_res_true=None, experiment_res_opt=None, 
+                          method_title=None):
+    pass
 
 
 def plot_top_n_similar_ts(dataset=None, experiment_res=None,
