@@ -132,7 +132,7 @@ def preprocessing_heartbeat_ptb(n_data_list=None):
 
 
 if __name__ == "__main__":
-    n_data_list = [128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+    n_data_list = [512, 1024, 2048, 4096, 8192, 16384, 32768]
 
     # preprocessing_fashion_mnist(n_data_list)
     # preprocessing_mnist(n_data_list)

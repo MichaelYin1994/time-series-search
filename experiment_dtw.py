@@ -73,16 +73,16 @@ def search_top_n_similar_ts(ts_query=None, data=None, n=10):
 
 
 if __name__ == "__main__":
-    N_NEED_SEARCH = 128
-    TOP_N_NEED_SEARCH = 50
+    N_NEED_SEARCH = 256
     PATH = ".//data//"
     target_dataset_name = "heartbeat_mit"
     dataset_names = os.listdir(PATH)
     dataset_names = [name for name in dataset_names if target_dataset_name in name]
-    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))
+    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))[:2]
 
     dataset = [load_data(PATH+name) for name in dataset_names]
-    experiment_total_res = {name[:-4]: None for name in dataset_names}
+    dataset_names = [name[:-4] for name in dataset_names]
+    experiment_total_res = {name: None for name in dataset_names}
 
     for data, name in zip(dataset, dataset_names):
         # STEP 0: preprocessing ts(Normalized, Filtering outlier)
@@ -96,7 +96,7 @@ if __name__ == "__main__":
         search_res = {}
         for ts_ind in selected_ts_ind:
             ts_query = data[ts_ind]
-            search_res_tmp = search_top_n_similar_ts(ts_query, data, n=TOP_N_NEED_SEARCH)
+            search_res_tmp = search_top_n_similar_ts(ts_query, data, n=len(data)-1)
             search_res[ts_ind] = search_res_tmp
 
         # STEP 3: Save the SEARCH_TOP_K results in experiment_res
@@ -105,4 +105,4 @@ if __name__ == "__main__":
     file_processor = LoadSave()
     new_file_name = ".//data_tmp//" + target_dataset_name + "_baseline_searching_res.pkl"
     file_processor.save_data(path=new_file_name,
-                              data=experiment_total_res)
+                             data=experiment_total_res)

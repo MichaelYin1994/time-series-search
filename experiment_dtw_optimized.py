@@ -48,7 +48,7 @@ def search_top_n_similar_ts(ts_query=None, data=None, n=10):
     for ind, ts in enumerate(data):
         start = time()
         dtw_dist = dtw(ts_query, ts, global_constraint="sakoe_chiba",
-                       sakoe_chiba_radius=5)
+                       sakoe_chiba_radius=20)
         end = time()
 
         top_n_searching_res.append([ind, dtw_dist, end-start])
@@ -68,37 +68,37 @@ def search_top_n_similar_ts(ts_query=None, data=None, n=10):
 
 
 if __name__ == "__main__":
-    N_SEARCH = 50
-    SEARCH_TOP_K = 50
+    N_NEED_SEARCH = 128
     PATH = ".//data//"
-    dataset_name = "heartbeat_mit"
-    file_names = os.listdir(PATH)
+    target_dataset_name = "heartbeat_mit"
+    dataset_names = os.listdir(PATH)
+    dataset_names = [name for name in dataset_names if target_dataset_name in name]
+    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))
 
-    file_names = [name for name in file_names if dataset_name in name]
-    file_names = sorted(file_names, key=lambda s: int(s.split("_")[-1][:-4]))
+    dataset = [load_data(PATH+name) for name in dataset_names]
+    dataset_names = [name[:-4] for name in dataset_names]
+    experiment_total_res = {name: None for name in dataset_names}
 
-    dataset = [load_data(PATH+name) for name in file_names]
-    experiment_res = {name: None for name in file_names}
 
-    for data, name in zip(dataset, file_names):
+    for data, name in zip(dataset, dataset_names):
         # STEP 0: preprocessing ts(Normalized, Filtering outlier)
         data = [get_z_normalized_ts(ts) for ts in data]
 
         # STEP 1: Randomly sampled n ts from the raw dataset
-        selected_ts_ind = sample_n_ts(data, n=N_SEARCH)
+        selected_ts_ind = sample_n_ts(data, n=N_NEED_SEARCH)
 
-        # STEP 2: For each selected ts, search SEARCH_TOP_K ts in the raw dataset,
+        # STEP 2: For each selected ts, search TOP_K_NEED_SEARCH ts in the raw dataset,
         #         return the top-k list results.
         search_res = {}
         for ts_ind in selected_ts_ind:
             ts_query = data[ts_ind]
-            search_res_tmp = search_top_n_similar_ts(ts_query, data, n=SEARCH_TOP_K+1)
+            search_res_tmp = search_top_n_similar_ts(ts_query, data, n=len(data)-1)
             search_res[ts_ind] = search_res_tmp
 
         # STEP 3: Save the SEARCH_TOP_K results in experiment_res
-        experiment_res[name] = search_res
+        experiment_total_res[name] = search_res
 
     file_processor = LoadSave()
-    new_file_name = ".//data_tmp//" + dataset_name + "_optimized_searching_res.pkl"
+    new_file_name = ".//data_tmp//" + target_dataset_name + "_optimized_searching_res.pkl"
     file_processor.save_data(path=new_file_name,
-                              data=experiment_res)
+                             data=experiment_total_res)

@@ -127,7 +127,7 @@ if __name__ == "__main__":
     file_names = sorted(file_names, key=lambda s: int(s.split("_")[-1][:-4]))
 
     dataset = [load_data(PATH+name) for name in file_names]
-    experiment_res_list = [load_data(path_name=".//data_tmp//" + dataset_name + "_searching_res.pkl"),
+    experiment_res_list = [load_data(path_name=".//data_tmp//" + dataset_name + "_baseline_searching_res.pkl"),
                            load_data(path_name=".//data_tmp//" + dataset_name + "_optimized_searching_res.pkl")]
 
     plot_experiment_time_cost(experiment_res_list)
