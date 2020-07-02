@@ -278,8 +278,8 @@ if __name__ == "__main__":
     experiment_res_list = [load_data(path_name=".//data_tmp//" + dataset_name + "_baseline_searching_res.pkl"),
                             load_data(path_name=".//data_tmp//" + dataset_name + "_optimized_searching_res.pkl")]
 
-    plot_experiment_time_cost(experiment_res_list, dataset_name=dataset_name)
-    plot_jaccard_performance(experiment_res_list, dataset_name=dataset_name)
+    # plot_experiment_time_cost(experiment_res_list, dataset_name=dataset_name)
+    # plot_jaccard_performance(experiment_res_list, dataset_name=dataset_name)
 
     # plot_top_n_similar_ts(dataset[-1], experiment_res, dataset_name=file_names[-1],
     #                       ts_query_ind=295, n=5)
