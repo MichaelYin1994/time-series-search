@@ -54,7 +54,8 @@ def jaccard_similarity_score(y_true=None, y_pred=None, k=None):
     return len(intersection) / k
 
 
-def plot_experiment_time_cost(experiment_res_list=None, save_fig=True):
+def plot_experiment_time_cost(experiment_res_list=None,
+                              save_fig=True, dataset_name="heartbeat_mit"):
     """Plot the time cost of multi-experiment results."""
     if not isinstance(experiment_res_list, list):
         raise TypeError("Invalid experiment result type !")
@@ -94,12 +95,13 @@ def plot_experiment_time_cost(experiment_res_list=None, save_fig=True):
         ax.grid(True)
 
     if save_fig:
-        plt.savefig(".//plots//experiment_time.png", bbox_inches="tight",
-                    dpi=700)
+        plt.savefig(".//plots//{}_experiment_time.png".format(dataset_name),
+                    bbox_inches="tight", dpi=700)
     plt.close("all")
 
 
-def plot_ndcg_performance(experiment_res_list=None, k=None, save_fig=True):
+def plot_ndcg_performance(experiment_res_list=None, k=None,
+                          save_fig=True, dataset_name="heartbeat_mit"):
     """Plot the NDCG scores of multi-experiment results."""
     if not isinstance(experiment_res_list, list):
         raise TypeError("Invalid experiment result type !")
@@ -163,19 +165,20 @@ def plot_ndcg_performance(experiment_res_list=None, k=None, save_fig=True):
         plt.tight_layout()
 
     if save_fig:
-        plt.savefig(".//plots//experiment_ndcg.png", bbox_inches="tight",
-                    dpi=700)
+        plt.savefig(".//plots//{}_experiment_ndcg.png".format(dataset_name),
+                    bbox_inches="tight", dpi=700)
     plt.close("all")
 
 
-def plot_jaccard_performance(experiment_res_list=None, k=None, save_fig=True):
-    """Plot the NDCG scores of multi-experiment results."""
+def plot_jaccard_performance(experiment_res_list=None, k=None,
+                             save_fig=True, dataset_name="heartbeat_mit"):
+    """Plot the Jaccard scores of multi-experiment results."""
     if not isinstance(experiment_res_list, list):
         raise TypeError("Invalid experiment result type !")
     plt.close("all")
     baseline_experiment_res = experiment_res_list[0]
 
-    k = [32, 64, 128, 256]
+    k = [8, 16, 32, 64]
     # Plot 1: NDCG Scores
     fig, ax_objs = plt.subplots(2, 2, figsize=(14, 10))
     ax_objs = ax_objs.ravel()
@@ -222,8 +225,8 @@ def plot_jaccard_performance(experiment_res_list=None, k=None, save_fig=True):
                             alpha=0.4, color="g")
     
             ax.set_xlabel("Dataset Size", fontsize=12)
-            ax.set_ylabel("@NDCG", fontsize=12)
-            ax.set_title("@NDCG(TOP-{}) Scores on the different dataset size".format(k[i]),
+            ax.set_ylabel("@Jaccard Similarity", fontsize=12)
+            ax.set_title("@JACCARD(TOP-{}) Scores on the different dataset size".format(k[i]),
                          fontsize=12)
             ax.tick_params(axis="both", labelsize=10, rotation=0)
             ax.set_xlim(min(test_sample_size_list), max(test_sample_size_list))
@@ -232,8 +235,8 @@ def plot_jaccard_performance(experiment_res_list=None, k=None, save_fig=True):
         plt.tight_layout()
 
     if save_fig:
-        plt.savefig(".//plots//experiment_jaccard.png", bbox_inches="tight",
-                    dpi=700)
+        plt.savefig(".//plots//{}_experiment_jaccard.png".format(dataset_name),
+                    bbox_inches="tight", dpi=700)
     plt.close("all")
 
 
@@ -275,9 +278,8 @@ if __name__ == "__main__":
     experiment_res_list = [load_data(path_name=".//data_tmp//" + dataset_name + "_baseline_searching_res.pkl"),
                             load_data(path_name=".//data_tmp//" + dataset_name + "_optimized_searching_res.pkl")]
 
-    plot_experiment_time_cost(experiment_res_list)
-    plot_ndcg_performance(experiment_res_list)
-    plot_jaccard_performance(experiment_res_list)
+    plot_experiment_time_cost(experiment_res_list, dataset_name=dataset_name)
+    plot_jaccard_performance(experiment_res_list, dataset_name=dataset_name)
 
     # plot_top_n_similar_ts(dataset[-1], experiment_res, dataset_name=file_names[-1],
     #                       ts_query_ind=295, n=5)

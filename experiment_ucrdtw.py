@@ -14,13 +14,11 @@ import seaborn as sns
 from tslearn.metrics import dtw, lb_keogh, lb_envelope
 import _ucrdtw
 from utils import LoadSave
+from time import time
+import heapq as hq
 
 sns.set(style="ticks", font_scale=1.2, palette='deep', color_codes=True)
 np.random.seed(2019)
-
-
-def lb_kim():
-    pass
 
 
 def load_data(path_name=None):
@@ -37,12 +35,15 @@ def sample_n_ts(data=None, n=50):
 
 
 def get_z_normalized_ts(ts=None):
-    mean_val, std_val = np.mean(ts), np.std(ts)
-
+    """Normlaizing the ts, at the same time, compute the LB_Kim."""
+    ts = np.array(ts)
+    mean_val, std_val = ts.mean(), ts.std()
     if std_val == 0:
-        return ts
-    else:
-        return (ts - mean_val) / std_val
+        std_val = 0.00001
+
+    ts_norm = (ts - mean_val) / std_val
+    min_val, max_val = ts_norm.min(), ts_norm.max()
+    return [min_val, max_val, ts_norm[0], ts_norm[-1]], ts_norm
 
 
 def search_top_n_similar_ts(ts_query=None, data=None, n=10):
@@ -72,37 +73,43 @@ def search_top_n_similar_ts(ts_query=None, data=None, n=10):
 
 
 if __name__ == "__main__":
-    N_SEARCH = 50
-    SEARCH_TOP_K = 50
+    N_NEED_SEARCH = 256
+    TOP_N_SEARCH = 64
     PATH = ".//data//"
-    dataset_name = "heartbeat_mit"
-    file_names = os.listdir(PATH)
+    target_dataset_name = "heartbeat_mit"
+    dataset_names = os.listdir(PATH)
+    dataset_names = [name for name in dataset_names if target_dataset_name in name]
+    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))
 
-    file_names = [name for name in file_names if dataset_name in name]
-    file_names = sorted(file_names, key=lambda s: int(s.split("_")[-1][:-4]))[:1]
+    # Loading all the dataset
+    dataset = [load_data(PATH+name) for name in dataset_names]
+    dataset_names = [name[:-4] for name in dataset_names]
+    experiment_total_res = {name: None for name in dataset_names}
 
-    dataset = [load_data(PATH+name) for name in file_names]
-    experiment_res = {name: None for name in file_names}
-
-    for data, name in zip(dataset, file_names):
+    for data, name in zip(dataset, dataset_names):
         # STEP 0: preprocessing ts(Normalized, Filtering outlier)
-        data = [get_z_normalized_ts(ts) for ts in data]
+        start = time()
+        data_new = []
+        for i in range(len(data)):
+            data_new.append(get_z_normalized_ts(data[i]))
+        end = time()
+        
+        print("[INFO] Size: {}, time: {}".format(len(data_new), end-start))
+        # # STEP 1: Randomly sampled n ts from the raw dataset
+        # selected_ts_ind = sample_n_ts(data_new, n=N_NEED_SEARCH)
 
-        # STEP 1: Randomly sampled n ts from the raw dataset
-        selected_ts_ind = sample_n_ts(data, n=N_SEARCH)
+        # # STEP 2: For each selected ts, search TOP_K_NEED_SEARCH ts in the raw dataset,
+        # #         return the top-k list results.
+        # search_res = {}
+        # for ts_ind in selected_ts_ind:
+        #     ts_query = data[ts_ind]
+        #     search_res_tmp = search_top_n_similar_ts(ts_query, data_new, n=TOP_N_SEARCH)
+        #     search_res[ts_ind] = search_res_tmp
 
-        # STEP 2: For each selected ts, search SEARCH_TOP_K ts in the raw dataset,
-        #         return the top-k list results.
-        search_res = {}
-        for ts_ind in selected_ts_ind:
-            ts_query = data[ts_ind]
-            search_res_tmp = search_top_n_similar_ts(ts_query, data, n=SEARCH_TOP_K+1)
-            search_res[ts_ind] = search_res_tmp
-
-        # STEP 3: Save the SEARCH_TOP_K results in experiment_res
-        experiment_res[name] = search_res
+    #     # STEP 3: Save the SEARCH_TOP_K results in experiment_res
+    #     experiment_total_res[name] = search_res
 
     # file_processor = LoadSave()
-    # new_file_name = ".//data_tmp//" + dataset_name + "_ucrdtw_searching_res.pkl"
+    # new_file_name = ".//data_tmp//" + target_dataset_name + "_ucrdtw_searching_res.pkl"
     # file_processor.save_data(path=new_file_name,
-    #                           data=experiment_res)
+    #                          data=experiment_total_res)
