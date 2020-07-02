@@ -68,7 +68,7 @@ def search_top_n_similar_ts(ts_query=None, data=None, n=10):
 
 
 if __name__ == "__main__":
-    N_NEED_SEARCH = 128
+    N_NEED_SEARCH = 256
     PATH = ".//data//"
     target_dataset_name = "heartbeat_mit"
     dataset_names = os.listdir(PATH)
@@ -78,7 +78,6 @@ if __name__ == "__main__":
     dataset = [load_data(PATH+name) for name in dataset_names]
     dataset_names = [name[:-4] for name in dataset_names]
     experiment_total_res = {name: None for name in dataset_names}
-
 
     for data, name in zip(dataset, dataset_names):
         # STEP 0: preprocessing ts(Normalized, Filtering outlier)

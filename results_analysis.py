@@ -17,16 +17,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tslearn.metrics import dtw
+from sklearn.metrics import ndcg_score
 from utils import LoadSave
 
 sns.set(style="ticks", font_scale=1.2, palette='deep', color_codes=True)
 np.random.seed(2019)
-
-
-def load_data(path_name=None):
-    """Loading *.pkl from path_name, path_name is like: .//data//mnist.pkl"""
-    file_processor = LoadSave()
-    return file_processor.load_data(path=path_name)
 
 
 def get_z_normalized_ts(ts=None):
@@ -38,26 +33,40 @@ def get_z_normalized_ts(ts=None):
         return (ts - mean_val) / std_val
 
 
-def get_jaccard_dist(set_x=None, set_y=None):
-    set_x, set_y = set(set_x), set(set_y)
-    union_set = set_x.union(set_y)
-    intersection_set = set_x.intersection(set_y)
-
-    return len(intersection_set)/len(union_set)
+def load_data(path_name=None):
+    """Loading *.pkl from path_name, path_name is like: .//data//mnist.pkl"""
+    file_processor = LoadSave()
+    return file_processor.load_data(path=path_name)
 
 
-def plot_experiment_time_cost(experiment_res_list=None):
+def jaccard_similarity_score(y_true=None, y_pred=None, k=None):
+    """
+    Computing the TOP-K jaccard similarity of two array: y_true, y_pred. 
+    """
+    if k == None:
+        k = len(y_true)
+    if y_true == None or y_pred == None or k > len(y_true) or len(y_true) != len(y_pred):
+        raise ValueError("Invalid input parameters !")
+
+    set_y_true, set_y_pred = set(y_true[:k]), set(y_pred[:k])
+
+    intersection = set_y_true.intersection(set_y_pred)
+    return len(intersection) / k
+
+
+def plot_experiment_time_cost(experiment_res_list=None, save_fig=True):
     """Plot the time cost of multi-experiment results."""
     if not isinstance(experiment_res_list, list):
         raise TypeError("Invalid experiment result type !")
+    plt.close("all")
 
-    # Plot 1: Average total searching time of each ts
+    # Plot 1: Average total searching time of each query ts on different size of dataset
     fig, ax = plt.subplots(figsize=(8, 5))
     for ind, experiment_res in enumerate(experiment_res_list):
         file_name_keys = list(experiment_res.keys())
         test_sample_size_list, mean_time_spend_list, std_time_spend_list = [], [], []
         for name in file_name_keys:
-            test_sample_size = int(name.split("_")[-1][:-4])
+            test_sample_size = int(name.split("_")[-1])
             test_sample_size_list.append(test_sample_size)
 
             mean_time_spend = np.mean([item["total_time_spend"] for item in experiment_res[name].values()])
@@ -74,22 +83,158 @@ def plot_experiment_time_cost(experiment_res_list=None):
             ax.plot(test_sample_size_list, mean_time_spend_list, marker="o",
                     markersize=5, linewidth=1.6, linestyle="-", color="k",
                     label="Optimized {}".format(ind))
-        # ax.fill_between(test_sample_size_list,
-        #                 np.array(mean_time_spend_list) - np.array(std_time_spend_list),
-        #                 np.array(mean_time_spend_list) + np.array(std_time_spend_list),
-        #                 alpha=0.4, color="g")
+
+        ax.set_xlabel("Searched Dataset set", fontsize=12)
+        ax.set_ylabel("Time[s]", fontsize=12)
+        ax.set_title("The time searched on a total dataset", fontsize=12)
         ax.tick_params(axis="both", labelsize=10, rotation=0)
-        ax.set_xlim(0, max(test_sample_size_list))
+        ax.set_xlim(min(test_sample_size_list), max(test_sample_size_list))
         ax.set_ylim(0, )
         ax.legend(fontsize=10)
         ax.grid(True)
 
-    return None
+    if save_fig:
+        plt.savefig(".//plots//experiment_time.png", bbox_inches="tight",
+                    dpi=700)
+    plt.close("all")
 
 
-def plot_rank_preformance(experiment_res_true=None, experiment_res_opt=None, 
-                          method_title=None):
-    pass
+def plot_ndcg_performance(experiment_res_list=None, k=None, save_fig=True):
+    """Plot the NDCG scores of multi-experiment results."""
+    if not isinstance(experiment_res_list, list):
+        raise TypeError("Invalid experiment result type !")
+    plt.close("all")
+    baseline_experiment_res = experiment_res_list[0]
+
+    k = [32, 64, 128, None]
+    # Plot 1: NDCG Scores
+    fig, ax_objs = plt.subplots(2, 2, figsize=(14, 10))
+    ax_objs = ax_objs.ravel()
+
+    for ind, experiment_res in enumerate(experiment_res_list[1:]):
+        file_name_keys = list(experiment_res.keys())
+
+        test_sample_size_list = []
+        mean_ndcg_list, std_ndcg_list = [], []
+        for name in file_name_keys:
+            test_sample_size = int(name.split("_")[-1])
+            test_sample_size_list.append(test_sample_size)
+
+            baseline = baseline_experiment_res[name]
+            optimized = experiment_res[name]
+            ndcg_scores = []
+            for ts_query in baseline.keys():
+                query_baseline_res = sorted(baseline[ts_query]["top_n_searching_res"], key=lambda x: x[0])
+                query_optimized_res = sorted(optimized[ts_query]["top_n_searching_res"], key=lambda x: x[0])
+
+                # +0.0001 prevent ZeroDiv error
+                query_baseline_res_array = [1 / (query_baseline_res[i][1] + 0.0001) for i in range(len(query_baseline_res))]
+                query_optimized_res_array = [1 / (query_optimized_res[i][1] + 0.0001) for i in range(len(query_optimized_res))]
+
+                # Score calculation: NDCG, AP, Jaccard Similarity
+                tmp_score = []
+                for top_k in k:
+                    tmp_score.append(ndcg_score([query_baseline_res_array], [query_optimized_res_array], k=top_k))
+                ndcg_scores.append(tmp_score)
+
+            mean_ndcg_list.append(np.mean(ndcg_scores, axis=0))
+            std_ndcg_list.append(np.std(ndcg_scores, axis=0))
+        mean_ndcg_list = np.vstack(mean_ndcg_list)
+        std_ndcg_list = np.vstack(std_ndcg_list)
+
+        # x-axis: total-dataset-size, y-axis: NDCG Score
+        for i, ax in enumerate(ax_objs):
+            ax.plot(test_sample_size_list, mean_ndcg_list[:, i], marker="o",
+                    markersize=5, linewidth=1.6, linestyle="-", color="k",
+                    label="Optimized {}".format(ind))
+            ax.fill_between(test_sample_size_list,
+                            mean_ndcg_list[:, i] - std_ndcg_list[:, i],
+                            mean_ndcg_list[:, i] + std_ndcg_list[:, i],
+                            alpha=0.4, color="g")
+    
+            ax.set_xlabel("Dataset Size", fontsize=12)
+            ax.set_ylabel("@NDCG", fontsize=12)
+            ax.set_title("@NDCG(TOP-{}) Scores on the different dataset size".format(k[i]),
+                         fontsize=12)
+            ax.tick_params(axis="both", labelsize=10, rotation=0)
+            ax.set_xlim(min(test_sample_size_list), max(test_sample_size_list))
+            ax.legend(fontsize=10)
+            ax.grid(True)
+        plt.tight_layout()
+
+    if save_fig:
+        plt.savefig(".//plots//experiment_ndcg.png", bbox_inches="tight",
+                    dpi=700)
+    plt.close("all")
+
+
+def plot_jaccard_performance(experiment_res_list=None, k=None, save_fig=True):
+    """Plot the NDCG scores of multi-experiment results."""
+    if not isinstance(experiment_res_list, list):
+        raise TypeError("Invalid experiment result type !")
+    plt.close("all")
+    baseline_experiment_res = experiment_res_list[0]
+
+    k = [32, 64, 128, 256]
+    # Plot 1: NDCG Scores
+    fig, ax_objs = plt.subplots(2, 2, figsize=(14, 10))
+    ax_objs = ax_objs.ravel()
+
+    for ind, experiment_res in enumerate(experiment_res_list[1:]):
+        file_name_keys = list(experiment_res.keys())
+
+        test_sample_size_list = []
+        mean_jaccard_list, std_jaccard_list = [], []
+        for name in file_name_keys:
+            test_sample_size = int(name.split("_")[-1])
+            test_sample_size_list.append(test_sample_size)
+
+            baseline = baseline_experiment_res[name]
+            optimized = experiment_res[name]
+            jaccard_scores = []
+            for ts_query in baseline.keys():
+                query_baseline_res = baseline[ts_query]["top_n_searching_res"]
+                query_optimized_res = optimized[ts_query]["top_n_searching_res"]
+
+                # +0.0001 prevent ZeroDiv error
+                query_baseline_res_array = [query_baseline_res[i][0] for i in range(len(query_baseline_res))]
+                query_optimized_res_array = [query_optimized_res[i][0] for i in range(len(query_optimized_res))]
+
+                # Score calculation: NDCG, AP, Jaccard Similarity
+                tmp_score = []
+                for top_k in k:
+                    tmp_score.append(jaccard_similarity_score(query_baseline_res_array, query_optimized_res_array, k=top_k))
+                jaccard_scores.append(tmp_score)
+
+            mean_jaccard_list.append(np.mean(jaccard_scores, axis=0))
+            std_jaccard_list.append(np.std(jaccard_scores, axis=0))
+        mean_jaccard_list = np.vstack(mean_jaccard_list)
+        std_jaccard_list = np.vstack(std_jaccard_list)
+
+        # x-axis: total-dataset-size, y-axis: NDCG Score
+        for i, ax in enumerate(ax_objs):
+            ax.plot(test_sample_size_list, mean_jaccard_list[:, i], marker="o",
+                    markersize=5, linewidth=1.6, linestyle="-", color="k",
+                    label="Optimized {}".format(ind))
+            ax.fill_between(test_sample_size_list,
+                            mean_jaccard_list[:, i] - std_jaccard_list[:, i],
+                            mean_jaccard_list[:, i] + std_jaccard_list[:, i],
+                            alpha=0.4, color="g")
+    
+            ax.set_xlabel("Dataset Size", fontsize=12)
+            ax.set_ylabel("@NDCG", fontsize=12)
+            ax.set_title("@NDCG(TOP-{}) Scores on the different dataset size".format(k[i]),
+                         fontsize=12)
+            ax.tick_params(axis="both", labelsize=10, rotation=0)
+            ax.set_xlim(min(test_sample_size_list), max(test_sample_size_list))
+            ax.legend(fontsize=10)
+            ax.grid(True)
+        plt.tight_layout()
+
+    if save_fig:
+        plt.savefig(".//plots//experiment_jaccard.png", bbox_inches="tight",
+                    dpi=700)
+    plt.close("all")
 
 
 def plot_top_n_similar_ts(dataset=None, experiment_res=None,
@@ -128,8 +273,11 @@ if __name__ == "__main__":
 
     dataset = [load_data(PATH+name) for name in file_names]
     experiment_res_list = [load_data(path_name=".//data_tmp//" + dataset_name + "_baseline_searching_res.pkl"),
-                           load_data(path_name=".//data_tmp//" + dataset_name + "_optimized_searching_res.pkl")]
+                            load_data(path_name=".//data_tmp//" + dataset_name + "_optimized_searching_res.pkl")]
 
     plot_experiment_time_cost(experiment_res_list)
+    plot_ndcg_performance(experiment_res_list)
+    plot_jaccard_performance(experiment_res_list)
+
     # plot_top_n_similar_ts(dataset[-1], experiment_res, dataset_name=file_names[-1],
     #                       ts_query_ind=295, n=5)

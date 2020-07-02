@@ -78,7 +78,7 @@ if __name__ == "__main__":
     target_dataset_name = "heartbeat_mit"
     dataset_names = os.listdir(PATH)
     dataset_names = [name for name in dataset_names if target_dataset_name in name]
-    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))[:2]
+    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))
 
     dataset = [load_data(PATH+name) for name in dataset_names]
     dataset_names = [name[:-4] for name in dataset_names]
