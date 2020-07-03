@@ -43,7 +43,7 @@ def get_z_normalized_ts(ts=None):
         return (ts - mean_val) / std_val
 
 
-def search_top_n_similar_ts(ts_query=None, data=None, n=10):
+def search_top_n_similar_ts(ts_query=None, data=None, n=10, verbose=False):
     """For the query ts, search the top-n similar ts in data object, return
        the searching result.
     """
@@ -69,6 +69,10 @@ def search_top_n_similar_ts(ts_query=None, data=None, n=10):
     searching_res["std_time_per_ts"] = np.std(time_spend)
     searching_res["total_searched_ts"] = len(data)
     searching_res["total_time_spend"] = np.sum(time_spend)
+
+    if verbose:
+        print("[INFO] Time spend: {}\n".format(searching_res["total_time_spend"]))
+
     return searching_res
 
 
@@ -78,7 +82,7 @@ if __name__ == "__main__":
     target_dataset_name = "heartbeat_mit"
     dataset_names = os.listdir(PATH)
     dataset_names = [name for name in dataset_names if target_dataset_name in name]
-    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))
+    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))[-1:]
 
     dataset = [load_data(PATH+name) for name in dataset_names]
     dataset_names = [name[:-4] for name in dataset_names]
@@ -96,7 +100,8 @@ if __name__ == "__main__":
         search_res = {}
         for ts_ind in selected_ts_ind:
             ts_query = data[ts_ind]
-            search_res_tmp = search_top_n_similar_ts(ts_query, data, n=len(data)-1)
+            search_res_tmp = search_top_n_similar_ts(ts_query, data,
+                                                     n=len(data)-1, verbose=True)
             search_res[ts_ind] = search_res_tmp
 
         # STEP 3: Save the SEARCH_TOP_K results in experiment_res

@@ -13,7 +13,9 @@ import warnings
 from functools import wraps
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 import pandas as pd
+from numba import njit
 
 warnings.filterwarnings('ignore')
 sns.set(style="ticks", font_scale=1.2, palette='deep', color_codes=True)
@@ -32,8 +34,53 @@ def timefn(fcn):
     return measure_time
 
 
+@njit
+def _local_squared_dist(x, y):
+    dist = 0.
+    for di in range(x.shape[0]):
+        diff = (x[di] - y[di])
+        dist += diff * diff
+    return dist
 
 
+@njit
+def _dtw_early_stop(s1, s2, best_so_far):
+    l1 = s1.shape[0]
+    l2 = s2.shape[0]
+    cum_sum = np.full((l1 + 1, l2 + 1), np.inf)
+    cum_sum[0, 0] = 0.
+    es_flag = 0
+
+    for i in range(l1):
+        row_min = np.inf
+        for j in range(l2):
+            cum_sum[i + 1, j + 1] = _local_squared_dist(s1[i], s2[j])
+            cum_sum[i + 1, j + 1] += min(cum_sum[i, j + 1],
+                                         cum_sum[i + 1, j],
+                                         cum_sum[i, j])
+
+            # Calculating the row min for early stopping
+            if cum_sum[i + 1, j + 1] < row_min:
+                row_min = cum_sum[i + 1, j + 1]
+
+        if row_min > best_so_far:
+            es_flag = 1
+        if es_flag:
+            break
+
+    if es_flag:
+        return None
+    return cum_sum[1:, 1:]
+
+
+def dtw_early_stop(s1, s2, best_so_far):
+    s1 = s1.reshape((-1, 1))
+    s2 = s2.reshape((-1, 1))
+
+    cum_sum_mat = _dtw_early_stop(s1, s2, best_so_far**2)
+    if cum_sum_mat is None:
+        return np.nan
+    return np.sqrt(cum_sum_mat[-1, -1])
 
 
 class LoadSave():

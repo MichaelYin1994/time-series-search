@@ -78,9 +78,11 @@ def itakura_mask(sz1, sz2, max_slope=2.):
 
 
 if __name__ == "__main__":
-    sz1, sz2 = 20, 15
+    sz1, sz2 = 15, 10
     mask = sakoe_chiba_mask(sz1, sz2, radius=2)
 
+    # Plot the warping path
+    plt.close("all")
     f, ax = plt.subplots(figsize=(12, 10))
     ax = sns.heatmap(mask, vmin=-1, vmax=1, ax=ax, linewidths=0.2)
     ax.tick_params(axis="both", labelsize=12, rotation=0)

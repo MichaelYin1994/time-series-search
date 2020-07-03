@@ -145,13 +145,13 @@ void lower_upper_lemire(double *t, int len, int r, double *l, double *u)
             u[i-r-1] = t[front(&du)];
             l[i-r-1] = t[front(&dl)];
         }
-        if (t[i] > t[i-1]) /// Upper hill
+        if (t[i] > t[i-1])
         {
             pop_back(&du);
             while (!empty(&du) && t[i] > t[back(&du)])
                 pop_back(&du);
         }
-        else  /// Down hill
+        else
         {
             pop_back(&dl);
             while (!empty(&dl) && t[i] < t[back(&dl)])
