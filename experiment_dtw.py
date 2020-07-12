@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tslearn.metrics import dtw
 from utils import LoadSave
+from tqdm import tqdm
 
 sns.set(style="ticks", font_scale=1.2, palette='deep', color_codes=True)
 np.random.seed(2019)
@@ -79,10 +80,10 @@ def search_top_n_similar_ts(ts_query=None, data=None, n=10, verbose=False):
 if __name__ == "__main__":
     N_NEED_SEARCH = 256
     PATH = ".//data//"
-    target_dataset_name = "heartbeat_mit"
+    target_dataset_name = "heartbeat_ptbdb"
     dataset_names = os.listdir(PATH)
     dataset_names = [name for name in dataset_names if target_dataset_name in name]
-    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))[-1:]
+    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))
 
     dataset = [load_data(PATH+name) for name in dataset_names]
     dataset_names = [name[:-4] for name in dataset_names]
@@ -98,16 +99,17 @@ if __name__ == "__main__":
         # STEP 2: For each selected ts, search TOP_K_NEED_SEARCH ts in the raw dataset,
         #         return the top-k list results.
         search_res = {}
-        for ts_ind in selected_ts_ind:
+        print("\n[INFO] Dataset name: {}".format(name))
+        for ts_ind in tqdm(selected_ts_ind):
             ts_query = data[ts_ind]
             search_res_tmp = search_top_n_similar_ts(ts_query, data,
-                                                     n=len(data)-1, verbose=True)
+                                                     n=len(data)-1, verbose=False)
             search_res[ts_ind] = search_res_tmp
 
         # STEP 3: Save the SEARCH_TOP_K results in experiment_res
         experiment_total_res[name] = search_res
 
-    # file_processor = LoadSave()
-    # new_file_name = ".//data_tmp//" + target_dataset_name + "_baseline_searching_res.pkl"
-    # file_processor.save_data(path=new_file_name,
-    #                          data=experiment_total_res)
+    file_processor = LoadSave()
+    new_file_name = ".//data_tmp//" + target_dataset_name + "_baseline_searching_res.pkl"
+    file_processor.save_data(path=new_file_name,
+                              data=experiment_total_res)

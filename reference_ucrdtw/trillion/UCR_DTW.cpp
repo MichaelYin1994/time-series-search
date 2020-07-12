@@ -198,7 +198,7 @@ double lb_kim_hierarchy(double *t, double *q, int j, int len, double mean, doubl
     lb += d;
     if (lb >= bsf)   return lb;
 
-    /// 2 points at back
+    /// 2 points at back 
     double y1 = (t[(len-2+j)] - mean) / std;
     d = min(dist(y1,q[len-1]), dist(y0, q[len-2]) );
     d = min(d, dist(y1,q[len-2]));

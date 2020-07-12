@@ -15,6 +15,7 @@ from tslearn.metrics import dtw, lb_keogh, lb_envelope
 import _ucrdtw
 from utils import LoadSave, dtw_early_stop
 from time import time
+from tqdm import tqdm
 import heapq as hq
 
 sns.set(style="ticks", font_scale=1.2, palette='deep', color_codes=True)
@@ -135,6 +136,7 @@ def search_top_n_similar_ts(ts_query_compact=None, data=None, n=10, verbose=Fals
     searching_res["mean_time_per_ts"] = time_spend / len(data)
     searching_res["std_time_per_ts"] = np.nan
     searching_res["total_searched_ts"] = len(data)
+    searching_res["total_computed_ts_precent"] = (1 - lb_kim_puring_count/len(data) - lb_keogh_puring_count/len(data) - lb_keogh_ec_puring_count/len(data)) * 100
     searching_res["total_time_spend"] = time_spend
     return searching_res
 
@@ -145,7 +147,7 @@ def load_benchmark(dataset_name=None):
 
 
 if __name__ == "__main__":
-    N_NEED_SEARCH = 64
+    N_NEED_SEARCH = 256
     TOP_N_SEARCH = 4
     PATH = ".//data//"
     target_dataset_name = "heartbeat_mit"
@@ -165,7 +167,7 @@ if __name__ == "__main__":
         # STEP 0: preprocessing ts(Normalized, Filtering outlier)
         data_new = []
         for i in range(len(data)):
-            data_new.append(get_z_normalized_ts(data[i]))
+            data_new.append(get_z_normalized_ts(data[i], radius=15))
 
         # STEP 1: Randomly sampled n ts from the raw dataset
         selected_ts_ind = np.random.choice(list(benchmark_dataset[name].keys()),
@@ -174,28 +176,47 @@ if __name__ == "__main__":
         # STEP 2: For each selected ts, search TOP_K_NEED_SEARCH ts in the raw dataset,
         #         return the top-k list results.
         search_res = {}
-        for ts_ind in selected_ts_ind:
-            print("ts_ind: {}".format(ts_ind))
+        time_accelerate, error_rate = [], []
+        time_spend, computed_precent = [], []
+
+        for ts_ind in tqdm(selected_ts_ind):
+            # print("ts_ind: {}".format(ts_ind))
             ts_query_compact = data_new[ts_ind]
             search_res_tmp = search_top_n_similar_ts(ts_query_compact, data_new,
-                                                      n=TOP_N_SEARCH, verbose=True)
+                                                      n=TOP_N_SEARCH, verbose=False)
             search_res[ts_ind] = search_res_tmp
 
             benchmark = benchmark_dataset[name][ts_ind]
-            print("[INFO] Time accelerate: {:.5f}".format(
-                benchmark["total_time_spend"] / search_res_tmp["total_time_spend"]))
+            # print("[INFO] Time accelerate: {:.5f}".format(
+            #     benchmark["total_time_spend"] / search_res_tmp["total_time_spend"]))
 
             # Accuracy checking
             benchmark_res_tmp = [item[0] for item in benchmark["top_n_searching_res"][:TOP_N_SEARCH]]
             search_res_tmp = [item[0] for item in search_res_tmp["top_n_searching_res"]]
             checking_res = (np.array(search_res_tmp) == np.array(benchmark_res_tmp)).sum()
+
+            error = 0
             if checking_res != TOP_N_SEARCH:
-                print("[ERROR] MIS-MATCHING: {:.5f}%".format((TOP_N_SEARCH - checking_res)/TOP_N_SEARCH * 100))
-                # raise ValueError("Searhing result mismatch !")
-            print("\n")
+                # print("[ERROR] MIS-MATCHING: {:.5f}%".format((TOP_N_SEARCH - checking_res)/TOP_N_SEARCH * 100))
+                error = 1
+            # print("\n")
+
+            time_spend.append(search_res[ts_ind]["total_time_spend"])
+            time_accelerate.append(benchmark["total_time_spend"] / search_res[ts_ind]["total_time_spend"])
+            computed_precent.append(search_res[ts_ind]["total_computed_ts_precent"])
+            error_rate.append(error)
 
         # STEP 3: Save the SEARCH_TOP_N results in experiment_res
         experiment_total_res[name] = search_res
+
+        # Print all information
+        print("\n[INFO] Time spend each query: {:.5f} +- {:.5f}".format(
+            np.mean(time_spend), np.std(time_spend)))
+        print("[INFO] Accelerated compared with basleine each query: {:.5f} +- {:.5f}".format(
+            np.mean(time_accelerate), np.std(time_accelerate)))
+        print("[INFO] Computed precent each query: {:.5f}% +- {:.5f}%".format(
+            np.mean(computed_precent), np.std(computed_precent)))
+        print("[INFO] Error rate: {:.5f}".format(sum(error_rate) / N_NEED_SEARCH))
 
     # file_processor = LoadSave()
     # new_file_name = ".//data_tmp//" + target_dataset_name + "_ucrdtw_searching_res.pkl"
