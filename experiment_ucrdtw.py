@@ -160,8 +160,8 @@ if __name__ == "__main__":
     dataset_names = [name[:-4] for name in dataset_names]
     experiment_total_res = {name: None for name in dataset_names}
 
-    # benchmark_dataset = load_benchmark(target_dataset_name)
-    # benchmark_dataset = {name: benchmark_dataset[name] for name in dataset_names}
+    benchmark_dataset = load_benchmark(target_dataset_name)
+    benchmark_dataset = {name: benchmark_dataset[name] for name in dataset_names}
 
     for data, name in zip(dataset, dataset_names):
         # STEP 0: preprocessing ts(Normalized, Filtering outlier)

@@ -316,7 +316,7 @@ double dtw(double* A, double* B, double *cb, int m, int r, double bsf = INF)
                 cost[k]=dist(A[0],B[0]);
                 min_cost = cost[k];
                 continue;
-            }
+            } 
 
             if ((j-1<0)||(k-1<0))     y = INF;
             else                      y = cost[k-1];
@@ -325,7 +325,7 @@ double dtw(double* A, double* B, double *cb, int m, int r, double bsf = INF)
             if ((i-1<0)||(j-1<0))     z = INF;
             else                      z = cost_prev[k];
 
-            /// Classic DTW calculation
+           /// Classic DTW calculation
             cost[k] = min( min( x, y) , z) + dist(A[i],B[j]);
 
             /// Find minimum cost in row for early abandoning (possibly to use column instead of row).
@@ -467,7 +467,7 @@ int main(  int argc , char *argv[] )
         error(1);
 
     Q_tmp = (Index *)malloc(sizeof(Index)*m);
-    if( Q_tmp == NULL )
+    if( Q_tmp == NULL ) 
         error(1);
 
     u = (double *)malloc(sizeof(double)*m);
@@ -542,6 +542,10 @@ int main(  int argc , char *argv[] )
          q[i] = (q[i] - mean)/std;
 
     /// Create envelop of the query: lower envelop, l, and upper envelop, u
+    /// r: constrained window size
+    /// l: lower envelop(double array), u: upper envelop(double array)
+    /// t: query times seies(double array)
+    /// m: query length
     lower_upper_lemire(q, m, r, l, u);
 
     /// Sort the query one time by abs(z-norm(q[i]))
@@ -604,6 +608,11 @@ int main(  int argc , char *argv[] )
         if (ep<=m-1)
         {   done = true;
         } else
+        /// r: constrained window size
+        /// l_buff: lower envelop(double array), u_buff: upper envelop(double array)
+        /// t: query times seies(double array)
+        /// ep: query length
+        /// buffer: m-1 data points waited to be compared
         {   lower_upper_lemire(buffer, ep, r, l_buff, u_buff);
 
             /// Just for printing a dot for approximate a million point. Not much accurate.
@@ -640,12 +649,13 @@ int main(  int argc , char *argv[] )
                     I = i-(m-1);
 
                     /// Use a constant lower bound to prune the obvious subsequence
+                    /// j: the start location of the data in the current circular array
                     lb_kim = lb_kim_hierarchy(t, q, j, m, mean, std, bsf);
 
                     if (lb_kim < bsf)
                     {
                         /// Use a linear time lower bound to prune; z_normalization of t will be computed on the fly.
-                        /// uo, lo are envelop of the query.
+                        /// uo, lo are envelop of the query. order: sorted query index array
                         lb_k = lb_keogh_cumulative(order, t, uo, lo, cb1, j, m, mean, std, bsf);
                         if (lb_k < bsf)
                         {
