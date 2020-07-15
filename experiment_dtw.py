@@ -80,7 +80,7 @@ def search_top_n_similar_ts(ts_query=None, data=None, n=10, verbose=False):
 if __name__ == "__main__":
     N_NEED_SEARCH = 256
     PATH = ".//data//"
-    target_dataset_name = "heartbeat_ptbdb"
+    target_dataset_name = "heartbeat_mit"
     dataset_names = os.listdir(PATH)
     dataset_names = [name for name in dataset_names if target_dataset_name in name]
     dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))
@@ -111,5 +111,7 @@ if __name__ == "__main__":
 
     file_processor = LoadSave()
     new_file_name = ".//data_tmp//" + target_dataset_name + "_baseline_searching_res.pkl"
+
+    print("\n")
     file_processor.save_data(path=new_file_name,
-                              data=experiment_total_res)
+                             data=experiment_total_res)

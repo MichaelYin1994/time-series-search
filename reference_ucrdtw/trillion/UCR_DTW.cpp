@@ -55,6 +55,11 @@ int comp(const void *a, const void* b)
 {   Index* x = (Index*)a;
     Index* y = (Index*)b;
     return abs(y->value) - abs(x->value);   // high to low
+
+    // double v = fabs(y->value) - fabs(x->value);
+    // if (v < 0) return -1;
+    // if (v > 0) return 1;
+    // return 0;
 }
 
 /// Initial the queue at the begining step of envelop calculation

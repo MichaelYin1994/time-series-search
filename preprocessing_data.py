@@ -48,6 +48,10 @@ def preprocessing_turnout(n_data_list=None):
         signal_data_list.append(signal)
 
     # Save the proprocessed data
+    for ind in range(len(n_data_list)):
+        if n_data_list[ind] is None:
+            n_data_list[ind] = len(signal_data_list)
+
     file_name = [".//data//fault_turnout_current_{}.pkl".format(i)
                  for i in n_data_list]
     for ind, item in enumerate(n_data_list):
@@ -100,6 +104,10 @@ def preprocessing_heartbeat_mit(n_data_list=None):
     heartbeat_data_list = heartbeat_data.tolist()
 
     # Save the proprocessed data
+    for ind in range(len(n_data_list)):
+        if n_data_list[ind] is None:
+            n_data_list[ind] = len(heartbeat_data_list)
+
     file_name = [".//data//heartbeat_mit_{}.pkl".format(i)
                  for i in n_data_list]
     file_processor = LoadSave()
@@ -122,6 +130,10 @@ def preprocessing_heartbeat_ptb(n_data_list=None):
     heartbeat_data_list = heartbeat_data.tolist()
 
     # Save the proprocessed data
+    for ind in range(len(n_data_list)):
+        if n_data_list[ind] is None:
+            n_data_list[ind] = len(heartbeat_data_list)
+
     file_name = [".//data//heartbeat_ptbdb_{}.pkl".format(i)
                   for i in n_data_list]
     file_processor = LoadSave()
@@ -132,10 +144,10 @@ def preprocessing_heartbeat_ptb(n_data_list=None):
 
 
 if __name__ == "__main__":
-    n_data_list = [512, 1024, 2048, 4096, 8192, 16384, 32768]
+    n_data_list = [8192, 16384, None]
 
     # preprocessing_fashion_mnist(n_data_list)
     # preprocessing_mnist(n_data_list)
-    preprocessing_heartbeat_mit(n_data_list)
-    preprocessing_heartbeat_ptb(n_data_list)
-    preprocessing_turnout(n_data_list)
+    preprocessing_heartbeat_mit(n_data_list.copy())
+    preprocessing_heartbeat_ptb(n_data_list.copy())
+    preprocessing_turnout(n_data_list.copy())
