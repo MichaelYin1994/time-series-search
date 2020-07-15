@@ -49,12 +49,70 @@ def preprocessing_ts(ts=None, envelope_radius=30):
     return np.array([min_ind, max_ind, min_val, max_val]), ts_norm, lb_keogh_down, lb_keogh_up, ts_ind_ordered
 
 
+def dist(x, y):
+    return (x-y)*(x-y)
+
+
 def lb_kim_hierarchy(ts_query, ts_candidate, bsf):
-    pass
-    
+    """Reference can be seen in the source code of UCR DTW."""
+    # 1 point at front and back
+    lb_kim = 0
+    lb_kim += (dist(ts_query[0], ts_candidate[0]) + dist(ts_query[-1], ts_candidate[-1]))
+    if lb_kim > bsf:
+        return lb_kim
+
+    # 2 points at front
+    path_dist = min(dist(ts_query[0], ts_candidate[1]),
+                    dist(ts_query[1], ts_candidate[0]),
+                    dist(ts_query[1], ts_candidate[1]))
+    lb_kim += path_dist
+    if lb_kim > bsf:
+        return lb_kim
+
+    # 2 points at end
+    path_dist = min(dist(ts_query[-2], ts_candidate[-2]),
+                    dist(ts_query[-1], ts_candidate[-2]),
+                    dist(ts_query[-2], ts_candidate[-1]))
+    lb_kim += path_dist
+    if lb_kim > bsf:
+        return lb_kim
+
+    # 3 pints at front:
+    #
+    #      0      1       2       3
+    # 0  np.inf  np.inf  np.inf  np.inf
+    # 1  np.inf   o       o       x
+    # 2  np.inf   o       o       x
+    # 3  np.inf   x       x       x
+    #
+    # Finf the minimum distance among all (x)
+    path_dist = min(dist(ts_query[2], ts_candidate[0]),
+                    dist(ts_query[2], ts_candidate[1]),
+                    dist(ts_query[2], ts_candidate[2]),
+                    dist(ts_query[1], ts_candidate[2]),
+                    dist(ts_query[0], ts_candidate[2]))
+    lb_kim += path_dist
+    if lb_kim > bsf:
+        return lb_kim
+
+    # 3 pints at end:
+    #
+    #     -3    -2    -1
+    # -3   x     x     x
+    # -2   x     o     o
+    # -1   x     o     o
+    #
+    # Finf the minimum distance among all (x)
+    path_dist = min(dist(ts_query[-3], ts_candidate[-3]),
+                    dist(ts_query[-3], ts_candidate[-2]),
+                    dist(ts_query[-3], ts_candidate[-1]),
+                    dist(ts_query[-2], ts_candidate[-3]),
+                    dist(ts_query[-1], ts_candidate[-3]))
+    lb_kim += path_dist
+    return lb_kim
 
 
-def search_top_n_similar_ts(ts_query_compact=None, data=None, n=10, verbose=False):
+def search_top_n_similar_ts(ts_query_compact=None, data_compact=None, n=10, verbose=False):
     """For the query ts, search the top-n similar ts in data object, return
        the searching result.
     """
@@ -69,22 +127,37 @@ def search_top_n_similar_ts(ts_query_compact=None, data=None, n=10, verbose=Fals
     ts_query_ind_ordered = ts_query_compact[4]
     lb_keogh_query_down, lb_keogh_query_up = ts_query_compact[2], ts_query_compact[3]
 
-    for ind, ts_candidate_compact in enumerate(data):
+    for ind, ts_candidate_compact in enumerate(data_compact):
         ts_candidate = ts_candidate_compact[1]
         lb_keogh_candidate_down, lb_keogh_candidate_up = ts_candidate_compact[2], ts_candidate_compact[3]
 
         # Initializing minimum heap(n + 1 for excluding itself)
         if len(min_heap) < n + 1:
-            dtw_dist = -dtw_early_stop(ts_query, ts_candidate_compact[1], np.inf)
+            dtw_dist = -dtw_early_stop(ts_query, ts_candidate, np.inf)
             # dtw_dist = -dtw(ts_query, ts_candidate_compact[1])
             hq.heappush(min_heap, [dtw_dist, ind])
             continue
 
-        # Step 1: lb_kim_hierarchy puring
+        # STEP 1: lb_kim_hierarchy puring
+        # -------------------
         bsf = min_heap[0][0]
-        
-        
-        
+        lb_kim = -lb_kim_hierarchy(ts_query, ts_candidate, -bsf)
+        if lb_kim < bsf:
+            continue
+
+        # Enhance the lb_kim using the pre-computed maximum and minimum value
+        if int(ts_query_compact[0][0]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3] \
+            and int(ts_query_compact[0][0]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3]:
+            pass
+        else:
+            lb_kim += -dist(ts_query_compact[0][2], ts_candidate_compact[0][2])
+
+        if int(ts_query_compact[0][1]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3]:
+            pass
+        else:
+            lb_kim += -dist(ts_query_compact[0][3], ts_candidate_compact[0][3])
+
+
         lb_kim_candidate = ts_candidate_compact[0]
         lb_kim = -np.sqrt(np.nansum(np.square(lb_kim_query - lb_kim_candidate)))
 
@@ -153,28 +226,30 @@ def load_benchmark(dataset_name=None):
 
 
 if __name__ == "__main__":
-    N_NEED_SEARCH = 256
-    TOP_N_SEARCH = 4
-    PATH = ".//data//"
-    TARGET_DATASET_NAME = "heartbeat_ptbdb"
+    # N_NEED_SEARCH = 256
+    # TOP_N_SEARCH = 4
+    # PATH = ".//data//"
+    # TARGET_DATASET_NAME = "heartbeat_ptbdb"
 
-    dataset_names = [name for name in os.listdir(PATH) if TARGET_DATASET_NAME in name]
-    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))[:1]
+    # # Loading all the dataset
+    # # ---------------------------
+    # dataset_names = [name for name in os.listdir(PATH) if TARGET_DATASET_NAME in name]
+    # dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))[:1]
 
-    # Loading all the dataset
+    # dataset = [load_data(PATH+name) for name in dataset_names]
+    # dataset_names = [name[:-4] for name in dataset_names]
+    # experiment_total_res = {name: None for name in dataset_names}
+
+    # benchmark_dataset = load_benchmark(TARGET_DATASET_NAME)
+    # benchmark_dataset = {name: benchmark_dataset[name] for name in dataset_names}
+
+    # Searching experiment start
     # ---------------------------
-    dataset = [load_data(PATH+name) for name in dataset_names]
-    dataset_names = [name[:-4] for name in dataset_names]
-    experiment_total_res = {name: None for name in dataset_names}
-
-    benchmark_dataset = load_benchmark(target_dataset_name)
-    benchmark_dataset = {name: benchmark_dataset[name] for name in dataset_names}
-
     for data, name in zip(dataset, dataset_names):
         # STEP 0: preprocessing ts(Normalized, Filtering outlier)
-        data_new = []
+        data_compact = []
         for i in range(len(data)):
-            data_new.append(preprocessing_ts(data[i], envelope_radius=30))
+            data_compact.append(preprocessing_ts(data[i], envelope_radius=30))
 
         # STEP 1: Randomly sampled n ts from the raw dataset
         selected_ts_ind = np.random.choice(list(benchmark_dataset[name].keys()),
@@ -187,8 +262,8 @@ if __name__ == "__main__":
         time_spend, computed_precent = [], []
 
         for ts_ind in tqdm(selected_ts_ind):
-            ts_query_compact = data_new[ts_ind]
-            search_res[ts_ind] = search_top_n_similar_ts(ts_query_compact, data_new,
+            ts_query_compact = data_compact[ts_ind]
+            search_res[ts_ind] = search_top_n_similar_ts(ts_query_compact, data_compact,
                                                          n=TOP_N_SEARCH, verbose=False)
 
     #         benchmark = benchmark_dataset[name][ts_ind]
