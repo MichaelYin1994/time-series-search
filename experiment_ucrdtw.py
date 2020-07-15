@@ -138,61 +138,54 @@ def search_top_n_similar_ts(ts_query_compact=None, data_compact=None, n=10, verb
             hq.heappush(min_heap, [dtw_dist, ind])
             continue
 
-        # STEP 1: lb_kim_hierarchy puring
-        # -------------------
         bsf = min_heap[0][0]
+        # STEP 1: lb_kim_hierarchy puring
+        # -------------------        
         lb_kim = -lb_kim_hierarchy(ts_query, ts_candidate, -bsf)
         if lb_kim < bsf:
+            lb_kim_puring_count += 1
             continue
 
         # Enhance the lb_kim using the pre-computed maximum and minimum value
         if int(ts_query_compact[0][0]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3] \
-            and int(ts_query_compact[0][0]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3]:
+            and int(ts_candidate_compact[0][0]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3]:
             pass
         else:
             lb_kim += -dist(ts_query_compact[0][2], ts_candidate_compact[0][2])
 
-        if int(ts_query_compact[0][1]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3]:
+        if int(ts_query_compact[0][1]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3] \
+            and int(ts_candidate_compact[0][1]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3]:
             pass
         else:
             lb_kim += -dist(ts_query_compact[0][3], ts_candidate_compact[0][3])
-
-
-        lb_kim_candidate = ts_candidate_compact[0]
-        lb_kim = -np.sqrt(np.nansum(np.square(lb_kim_query - lb_kim_candidate)))
-
-        if lb_kim < min_n_heap[0][0]:
+        if lb_kim < bsf:
             lb_kim_puring_count += 1
             continue
 
-        # Step 2: LB_Keogh puring(Including exchange)
-        ts_candidate = ts_candidate_compact[1]
-        lb_keogh_candidate_down, lb_keogh_candidate_up = ts_candidate_compact[2], ts_candidate_compact[3]
-
+        # STEP 2: LB_Keogh puring(Including exchange)
+        # -------------------
         lb_keogh_original = -lb_keogh(ts_query, None,
                                       envelope_candidate=(lb_keogh_candidate_down, lb_keogh_candidate_up))
-        if lb_keogh_original < min_n_heap[0][0]:
+        if lb_keogh_original < bsf:
             lb_keogh_puring_count += 1
             continue
 
         lb_keogh_ec = -lb_keogh(ts_candidate, None,
                                 envelope_candidate=(lb_keogh_query_down, lb_keogh_query_up))
-        if lb_keogh_ec < min_n_heap[0][0]:
+        if lb_keogh_ec < bsf:
             lb_keogh_ec_puring_count += 1
             continue
 
         # Step 3: Computing the DTW distance
-        best_so_far = -min_n_heap[0][0]
-        # dtw_dist = -dtw(ts_query, ts_candidate[1])
-        dtw_dist = -dtw_early_stop(ts_query, ts_candidate, best_so_far)
+        # -------------------
+        dtw_dist = -dtw_early_stop(ts_query, ts_candidate, bsf)
         if np.isnan(dtw_dist):
             es_puring_count += 1
             continue
-        if dtw_dist < min_n_heap[0][0]:
+        if dtw_dist < bsf:
             continue
         else:
-            hq.heapreplace(min_n_heap, [dtw_dist, ind])
-
+            hq.heapreplace(min_heap, [dtw_dist, ind])
         # top_n_searching_res.append([ind, dtw_dist, end-start])
     end = time()
     time_spend = end - start
@@ -207,11 +200,11 @@ def search_top_n_similar_ts(ts_query_compact=None, data_compact=None, n=10, verb
             (1 - lb_kim_puring_count/len(data) - lb_keogh_puring_count/len(data) - lb_keogh_ec_puring_count/len(data)) * 100))
 
     # Sorted the results, exclude the first results(QUery itself)
-    min_n_heap = [[item[1], -item[0]] for item in min_n_heap]
-    min_n_heap = sorted(min_n_heap, key=lambda x: x[1])[1:]
+    min_heap = [[item[1], -item[0]] for item in min_heap]
+    min_heap = sorted(min_heap, key=lambda x: x[1])[1:]
 
     searching_res = {}
-    searching_res["top_n_searching_res"] = min_n_heap
+    searching_res["top_n_searching_res"] = min_heap
     searching_res["mean_time_per_ts"] = time_spend / len(data)
     searching_res["std_time_per_ts"] = np.nan
     searching_res["total_searched_ts"] = len(data)
@@ -226,22 +219,22 @@ def load_benchmark(dataset_name=None):
 
 
 if __name__ == "__main__":
-    # N_NEED_SEARCH = 256
-    # TOP_N_SEARCH = 4
-    # PATH = ".//data//"
-    # TARGET_DATASET_NAME = "heartbeat_ptbdb"
+    N_NEED_SEARCH = 256
+    TOP_N_SEARCH = 3
+    PATH = ".//data//"
+    TARGET_DATASET_NAME = "heartbeat_mit"
 
-    # # Loading all the dataset
-    # # ---------------------------
-    # dataset_names = [name for name in os.listdir(PATH) if TARGET_DATASET_NAME in name]
-    # dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))[:1]
+    # Loading all the dataset
+    # ---------------------------
+    dataset_names = [name for name in os.listdir(PATH) if TARGET_DATASET_NAME in name]
+    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))[-1:]
 
-    # dataset = [load_data(PATH+name) for name in dataset_names]
-    # dataset_names = [name[:-4] for name in dataset_names]
-    # experiment_total_res = {name: None for name in dataset_names}
+    dataset = [load_data(PATH+name) for name in dataset_names]
+    dataset_names = [name[:-4] for name in dataset_names]
+    experiment_total_res = {name: None for name in dataset_names}
 
-    # benchmark_dataset = load_benchmark(TARGET_DATASET_NAME)
-    # benchmark_dataset = {name: benchmark_dataset[name] for name in dataset_names}
+    benchmark_dataset = load_benchmark(TARGET_DATASET_NAME)
+    benchmark_dataset = {name: benchmark_dataset[name] for name in dataset_names}
 
     # Searching experiment start
     # ---------------------------
@@ -266,39 +259,39 @@ if __name__ == "__main__":
             search_res[ts_ind] = search_top_n_similar_ts(ts_query_compact, data_compact,
                                                          n=TOP_N_SEARCH, verbose=False)
 
-    #         benchmark = benchmark_dataset[name][ts_ind]
-    #         # print("[INFO] Time accelerate: {:.5f}".format(
-    #         #     benchmark["total_time_spend"] / search_res_tmp["total_time_spend"]))
+            benchmark = benchmark_dataset[name][ts_ind]
+            # print("[INFO] Time accelerate: {:.5f}".format(
+            #     benchmark["total_time_spend"] / search_res_tmp["total_time_spend"]))
 
-    #         # Accuracy checking
-    #         benchmark_res_tmp = [item[0] for item in benchmark["top_n_searching_res"][:TOP_N_SEARCH]]
-    #         search_res_tmp = [item[0] for item in search_res_tmp["top_n_searching_res"]]
-    #         checking_res = (np.array(search_res_tmp) == np.array(benchmark_res_tmp)).sum()
+            # Accuracy checking
+            benchmark_res_tmp = [item[0] for item in benchmark["top_n_searching_res"][:TOP_N_SEARCH]]
+            search_res_tmp = [item[0] for item in search_res[ts_ind]["top_n_searching_res"]]
+            checking_res = (np.array(search_res_tmp) == np.array(benchmark_res_tmp)).sum()
 
-    #         error = 0
-    #         if checking_res != TOP_N_SEARCH:
-    #             # print("[ERROR] MIS-MATCHING: {:.5f}%".format((TOP_N_SEARCH - checking_res)/TOP_N_SEARCH * 100))
-    #             error = 1
-    #         # print("\n")
+            error = 0
+            if checking_res != TOP_N_SEARCH:
+                # print("[ERROR] MIS-MATCHING: {:.5f}%".format((TOP_N_SEARCH - checking_res)/TOP_N_SEARCH * 100))
+                error = 1
+            # print("\n")
 
-    #         time_spend.append(search_res[ts_ind]["total_time_spend"])
-    #         time_accelerate.append(benchmark["total_time_spend"] / search_res[ts_ind]["total_time_spend"])
-    #         computed_precent.append(search_res[ts_ind]["total_computed_ts_precent"])
-    #         error_rate.append(error)
+            time_spend.append(search_res[ts_ind]["total_time_spend"])
+            time_accelerate.append(benchmark["total_time_spend"] / search_res[ts_ind]["total_time_spend"])
+            computed_precent.append(search_res[ts_ind]["total_computed_ts_precent"])
+            error_rate.append(error)
 
-    #     # STEP 3: Save the SEARCH_TOP_N results in experiment_res
-    #     experiment_total_res[name] = search_res
+        # STEP 3: Save the SEARCH_TOP_N results in experiment_res
+        experiment_total_res[name] = search_res
 
-    #     # Print all information
-    #     print("\n[INFO] Time spend each query: {:.5f} +- {:.5f}".format(
-    #         np.mean(time_spend), np.std(time_spend)))
-    #     print("[INFO] Accelerated compared with basleine each query: {:.5f} +- {:.5f}".format(
-    #         np.mean(time_accelerate), np.std(time_accelerate)))
-    #     print("[INFO] Computed precent each query: {:.5f}% +- {:.5f}%".format(
-    #         np.mean(computed_precent), np.std(computed_precent)))
-    #     print("[INFO] Error rate: {:.5f}".format(sum(error_rate) / N_NEED_SEARCH))
+        # Print all information
+        print("\n[INFO] Time spend each query: {:.5f} +- {:.5f}".format(
+            np.mean(time_spend), np.std(time_spend)))
+        print("[INFO] Accelerated compared with basleine each query: {:.5f} +- {:.5f}".format(
+            np.mean(time_accelerate), np.std(time_accelerate)))
+        print("[INFO] Computed precent each query: {:.5f}% +- {:.5f}%".format(
+            np.mean(computed_precent), np.std(computed_precent)))
+        print("[INFO] Error rate: {:.5f}".format(sum(error_rate) / N_NEED_SEARCH))
 
     # file_processor = LoadSave()
     # new_file_name = ".//data_tmp//" + target_dataset_name + "_ucrdtw_searching_res.pkl"
     # file_processor.save_data(path=new_file_name,
-    #                          data=experiment_total_res)
+    #                           data=experiment_total_res)

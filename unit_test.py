@@ -60,7 +60,9 @@ def dist(x, y):
     return (x-y)*(x-y)
 
 
-def lb_kim_hierarchy(ts_query, ts_candidate, bsf):
+def lb_kim_hierarchy(ts_query,
+                     ts_candidate,
+                     bsf):
     """Reference can be seen in the source code of UCR DTW."""
     # 1 point at front and back
     lb_kim = 0
@@ -117,13 +119,30 @@ def lb_kim_hierarchy(ts_query, ts_candidate, bsf):
                     dist(ts_query[-1], ts_candidate[-3]))
     lb_kim += path_dist
     return lb_kim
-    
-
-def lb_keogh_cumulative(order, ts_query, ts_candidate, bsf):
-    pass
 
 
-def dtw_early_stop(ts_query, ts_candidate, bsf):
+def lb_keogh_cumulative(ts_query_index_order,
+                        ts_query_lb,
+                        ts_query_ub,
+                        ts_candidate,
+                        bsf):
+    lb_keogh_ = 0
+    for i in range(len(ts_candidate)):
+        d = 0
+        if ts_candidate[ts_query_index_order[i]] > ts_query_ub[ts_query_index_order[i]]:
+            d = dist(ts_candidate[ts_query_index_order[i]], ts_query_ub[ts_query_index_order[i]])
+        elif ts_candidate[ts_query_index_order[i]] < ts_query_lb[ts_query_index_order[i]]:
+            d = dist(ts_candidate[ts_query_index_order[i]], ts_query_lb[ts_query_index_order[i]])
+        lb_keogh_ += d
+
+        if lb_keogh_ > bsf:
+            return lb_keogh_
+    return lb_keogh_**0.5
+
+
+def dtw_early_stop(ts_query,
+                   ts_candidate,
+                   bsf):
     pass
 
 
@@ -136,8 +155,20 @@ if __name__ == "__main__":
     for i in range(N_TS_GENERATING):
         dataset.append(get_z_normalized_ts(np.random.rand(LEN_TS)))
 
-    ts_x_ind, ts_y_ind = 10, 50
+    ts_x_ind, ts_y_ind = 11, 50
     ts_x, ts_y = dataset[ts_x_ind], dataset[ts_y_ind]
+    ts_order_x, ts_order_y = np.argsort(np.abs(ts_x))[::-1], np.argsort(np.abs(ts_y))[::-1]
 
     # lb_kim_hierarchy
     lb_kim = lb_kim_hierarchy(ts_x, ts_y, 3.5)
+
+    # lb_keogh_cumulative
+    lb_keogh_lb, lb_keogh_ub = lb_envelope(ts_x, radius=30)
+    lb_keogh_original = lb_keogh(ts_y, None,
+                                 envelope_candidate=(lb_keogh_lb, lb_keogh_ub))
+    lb_keogh_new = lb_keogh_cumulative(ts_order_x,
+                                       lb_keogh_lb,
+                                       lb_keogh_ub,
+                                       ts_y,
+                                       0.1)
+
