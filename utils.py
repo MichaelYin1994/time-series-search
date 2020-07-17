@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import pandas as pd
-from numba import njit
+from numba import njit, prange
 
 warnings.filterwarnings('ignore')
 sns.set(style="ticks", font_scale=1.2, palette='deep', color_codes=True)
@@ -35,54 +35,63 @@ def timefn(fcn):
 
 
 @njit
-def _local_squared_dist(x, y):
-    dist = 0.
-    for di in range(x.shape[0]):
-        diff = (x[di] - y[di])
-        dist += diff * diff
-    return dist
+def dist(x, y):
+    return (x-y)*(x-y)
 
 
 @njit
-def _dtw_early_stop(s1, s2, best_so_far):
-    l1 = s1.shape[0]
-    l2 = s2.shape[0]
-    cum_sum = np.full((l1 + 1, l2 + 1), np.inf)
-    cum_sum[0, 0] = 0.
-    es_flag = 0
+def dtw_ucrdtw(ts_x,
+               ts_y,
+               cb_cum,
+               window_size=5,
+               bsf=np.inf):
+    """
+    ----------
+    Author: Michael Yin
+    E-Mail: zhuoyin94@163.com
+    ----------
 
-    for i in range(l1):
+    @Description:
+    ----------
+    Dynamic Time Warping(DTW) Distance with early stopping and the
+    Sakoe-Chiba Band. The time complexity is O(n^2), but strictly less
+    than O(n^2). The space complexity is O(window_size).
+
+    @Parameters:
+    ----------
+    ts_x: {array-like}
+        The time series x.
+    ts_y: {array-like}
+        The time series y.
+    cb_cum: {array-like}
+        Cummulative bound of lb_keogh array in the reverse form.
+    window_size: {int-like}
+        The window size of sakoe-chiba band.
+    bsf: {float-like}
+        The best-so-far query dtw distance.
+
+    @Return:
+    ----------
+    dtw distance between ts_x and ts_y
+    """
+    l1, l2 = ts_x.shape[0], ts_y.shape[0]
+    cum_sum = np.full((l1+1, l2+1), np.inf)
+    cum_sum[0, 0] = 0
+    bsf = bsf**2
+
+    for i in prange(l1):
         row_min = np.inf
-        for j in range(l2):
-            cum_sum[i + 1, j + 1] = _local_squared_dist(s1[i], s2[j])
-            cum_sum[i + 1, j + 1] += min(cum_sum[i, j + 1],
-                                         cum_sum[i + 1, j],
-                                         cum_sum[i, j])
+        for j in prange(l2):
+            cum_sum[i+1, j+1] = dist(ts_x[i], ts_y[j])
+            cum_sum[i+1, j+1] += min(cum_sum[i, j+1], cum_sum[i+1, j], cum_sum[i, j])
 
             # Calculating the row min for early stopping
-            if cum_sum[i + 1, j + 1] < row_min:
-                row_min = cum_sum[i + 1, j + 1]
+            if cum_sum[i+1, j+1] < row_min:
+                row_min = cum_sum[i+1, j+1]
 
-        if row_min > best_so_far:
-            es_flag = 1
-        if es_flag:
-            break
-
-    if es_flag:
-        return None
-    return cum_sum[1:, 1:]
-
-
-def dtw_early_stop(s1, s2, best_so_far):
-    s1 = s1.reshape((-1, 1))
-    s2 = s2.reshape((-1, 1))
-
-    cum_sum_mat = _dtw_early_stop(s1, s2, best_so_far**2)
-    if cum_sum_mat is None:
-        return np.nan
-    return np.sqrt(cum_sum_mat[-1, -1])
-
-
+        if (i+1 < l1) and ((row_min + cb_cum[i+1]) > bsf):
+            return None
+    return cum_sum[-1, -1]**0.5
 
 
 class LoadSave():

@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tslearn.metrics import dtw, lb_keogh, lb_envelope
 import _ucrdtw
-from utils import LoadSave, dtw_early_stop
+from utils import LoadSave, dtw_ucrdtw
 from time import time
 from tqdm import tqdm
 import heapq as hq
@@ -136,6 +136,14 @@ def lb_kim_hierarchy(ts_query, ts_candidate, bsf):
     return lb_kim
 
 
+@njit
+def lb_keogh_reverse_cumulative(cb, cb_cum):
+    cb_cum[len(cb_cum)-1] = cb[len(cb)-1]
+    for i in prange(len(cb_cum)-2, 0-1, -1):
+        cb_cum[i] = cb_cum[i+1] + cb[i]
+    return cb_cum
+
+
 def search_top_n_similar_ts(ts_query_compact=None,
                             data_compact=None,
                             n=10,
@@ -161,13 +169,13 @@ def search_top_n_similar_ts(ts_query_compact=None,
 
         # Initializing minimum heap(n + 1 for excluding itself)
         if len(min_heap) < n + 1:
-            dtw_dist = -dtw_early_stop(ts_query, ts_candidate, np.inf)
+            dtw_dist = -dtw_ucrdtw(ts_query, ts_candidate, np.zeros(len(ts_query)))
             # dtw_dist = -dtw(ts_query, ts_candidate_compact[1])
             hq.heappush(min_heap, [dtw_dist, ind])
             continue
 
         bsf = min_heap[0][0]
-        cb, cb_ec = np.empty(len(ts_query)), np.empty(len(ts_query))
+        cb, cb_ec, cb_cum = np.empty(len(ts_query)), np.empty(len(ts_query)), np.zeros(len(ts_query))
         # STEP 1: lb_kim_hierarchy puring
         # -------------------        
         lb_kim = -lb_kim_hierarchy(ts_query, ts_candidate, -bsf)
@@ -215,12 +223,22 @@ def search_top_n_similar_ts(ts_query_compact=None,
             lb_keogh_ec_puring_count += 1
             continue
 
-        # Step 3: Computing the DTW distance
+        # STEP 3: Computing the DTW distance
         # -------------------
-        dtw_dist = -dtw_early_stop(ts_query, ts_candidate, bsf)
-        if np.isnan(dtw_dist):
+        if lb_keogh_original > lb_keogh_ec:
+            cb_cum = lb_keogh_reverse_cumulative(cb_ec, cb_cum)
+        else:
+            cb_cum = lb_keogh_reverse_cumulative(cb, cb_cum)
+
+        dtw_dist = dtw_ucrdtw(ts_query,
+                              ts_candidate,
+                              cb_cum,
+                              bsf=-bsf)
+        if dtw_dist is None:
             es_puring_count += 1
             continue
+
+        dtw_dist = -dtw_dist
         if dtw_dist < bsf:
             continue
         else:
@@ -261,7 +279,7 @@ if __name__ == "__main__":
     N_NEED_SEARCH = 256
     TOP_N_SEARCH = 3
     PATH = ".//data//"
-    TARGET_DATASET_NAME = "heartbeat_mit"
+    TARGET_DATASET_NAME = "heartbeat_ptbdb"
 
     # Loading all the dataset
     # ---------------------------
@@ -281,7 +299,7 @@ if __name__ == "__main__":
         # STEP 0: preprocessing ts(Normalized, Filtering outlier)
         data_compact = []
         for i in range(len(data)):
-            data_compact.append(preprocessing_ts(data[i], envelope_radius=30))
+            data_compact.append(preprocessing_ts(data[i], envelope_radius=60))
 
         # STEP 1: Randomly sampled n ts from the raw dataset
         selected_ts_ind = np.random.choice(list(benchmark_dataset[name].keys()),

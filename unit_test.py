@@ -145,6 +145,7 @@ def lb_keogh_cumulative(ts_query_index_order,
     return lb_keogh_**0.5, ts_query_cb
 
 
+@njit
 def dtw_ucrdtw(ts_x,
                ts_y,
                cb_cum,
@@ -179,6 +180,24 @@ def dtw_ucrdtw(ts_x,
     ----------
     dtw distance between ts_x and ts_y
     """
+    l1, l2 = ts_x.shape[0], ts_y.shape[0]
+    cum_sum = np.full((l1+1, l2+1), np.inf)
+    cum_sum[0, 0] = 0
+    bsf = bsf**2
+
+    for i in prange(l1):
+        row_min = np.inf
+        for j in prange(l2):
+            cum_sum[i+1, j+1] = dist(ts_x[i], ts_y[j])
+            cum_sum[i+1, j+1] += min(cum_sum[i, j+1], cum_sum[i+1, j], cum_sum[i, j])
+
+            # Calculating the row min for early stopping
+            if cum_sum[i+1, j+1] < row_min:
+                row_min = cum_sum[i+1, j+1]
+
+        if (i+1 < l1) and ((row_min + cb_cum[i+1]) > bsf):
+            return None
+    return cum_sum[-1, -1]**0.5
 
 
 @njit
@@ -190,42 +209,45 @@ def lb_keogh_reverse_cumulative(cb, cb_cum):
 
 
 if __name__ == "__main__":
-    # Preparing data
-    N_TS_GENERATING = 100
-    LEN_TS = 150
+    # # Preparing data
+    # N_TS_GENERATING = 100
+    # LEN_TS = 150
 
-    dataset = []
-    for i in range(N_TS_GENERATING):
-        dataset.append(get_z_normalized_ts(np.random.rand(LEN_TS)))
+    # dataset = []
+    # for i in range(N_TS_GENERATING):
+    #     dataset.append(get_z_normalized_ts(np.random.rand(LEN_TS)))
 
-    ts_query_ind, ts_candidate_ind = 22, 50
-    ts_query, ts_candidate = dataset[ts_query_ind], dataset[ts_candidate_ind]
-    ts_query_ind_ordered, ts_candidate_ind_ordered = np.argsort(np.abs(ts_query))[::-1], np.argsort(np.abs(ts_candidate))[::-1]
+    # ts_query_ind, ts_candidate_ind = 22, 50
+    # ts_query, ts_candidate = dataset[ts_query_ind], dataset[ts_candidate_ind]
+    # ts_query_ind_ordered, ts_candidate_ind_ordered = np.argsort(np.abs(ts_query))[::-1], np.argsort(np.abs(ts_candidate))[::-1]
 
-    # lb_kim_hierarchy
-    lb_kim = lb_kim_hierarchy(ts_query, ts_candidate, 3.5)
+    # # lb_kim_hierarchy
+    # lb_kim = lb_kim_hierarchy(ts_query, ts_candidate, 3.5)
 
-    # lb_keogh_cumulative
-    cb, cb_ec = np.empty(len(ts_query)), np.empty(len(ts_query))
-    lb_keogh_query, ub_keogh_query = lb_envelope(ts_query, radius=30)
-    lb_keogh_query, ub_keogh_query = lb_keogh_query.reshape(-1, ), ub_keogh_query.reshape(-1, )
+    # # lb_keogh_cumulative
+    # cb, cb_ec = np.empty(len(ts_query)), np.empty(len(ts_query))
+    # lb_keogh_query, ub_keogh_query = lb_envelope(ts_query, radius=30)
+    # lb_keogh_query, ub_keogh_query = lb_keogh_query.reshape(-1, ), ub_keogh_query.reshape(-1, )
 
-    lb_keogh_candidate, ub_keogh_candidate = lb_envelope(ts_candidate, radius=30)
-    lb_keogh_candidate, ub_keogh_candidate = lb_keogh_candidate.reshape(-1, ), ub_keogh_candidate.reshape(-1, )
+    # lb_keogh_candidate, ub_keogh_candidate = lb_envelope(ts_candidate, radius=30)
+    # lb_keogh_candidate, ub_keogh_candidate = lb_keogh_candidate.reshape(-1, ), ub_keogh_candidate.reshape(-1, )
 
-    lb_keogh_original, cb = lb_keogh_cumulative(ts_query_ind_ordered,
-                                                lb_keogh_query,
-                                                ub_keogh_query,
-                                                cb,
-                                                ts_candidate,
-                                                np.inf)
+    # lb_keogh_original, cb = lb_keogh_cumulative(ts_query_ind_ordered,
+    #                                             lb_keogh_query,
+    #                                             ub_keogh_query,
+    #                                             cb,
+    #                                             ts_candidate,
+    #                                             np.inf)
 
-    lb_keogh_ec, cb_ec = lb_keogh_cumulative(ts_candidate_ind_ordered, 
-                                             lb_keogh_candidate,
-                                             ub_keogh_candidate,
-                                             cb_ec,
-                                             ts_query,
-                                             np.inf)
+    # lb_keogh_ec, cb_ec = lb_keogh_cumulative(ts_candidate_ind_ordered, 
+    #                                          lb_keogh_candidate,
+    #                                          ub_keogh_candidate,
+    #                                          cb_ec,
+    #                                          ts_query,
+    #                                          np.inf)
 
     cb_cum = np.zeros((len(ts_query, )))
     cb_cum = lb_keogh_reverse_cumulative(cb, cb_cum)
+
+    dtw_dist = dtw_ucrdtw(ts_query, ts_candidate, cb_cum, bsf=1)
+    dtw_dist_benchmark = dtw(ts_query, ts_candidate)
