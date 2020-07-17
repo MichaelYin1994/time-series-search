@@ -14,6 +14,7 @@ from tslearn.metrics import dtw, lb_keogh, lb_envelope
 import _ucrdtw
 from time import time
 from tqdm import tqdm
+from numba import njit, prange
 
 sns.set(style="ticks", font_scale=1.2, palette='deep', color_codes=True)
 np.random.seed(2019)
@@ -56,6 +57,7 @@ def plot_compared_ts(dataset, ts_x_ind, ts_y_ind):
     fig.tight_layout(pad=0.1)
 
 
+@njit
 def dist(x, y):
     return (x-y)*(x-y)
 
@@ -63,7 +65,7 @@ def dist(x, y):
 def lb_kim_hierarchy(ts_query,
                      ts_candidate,
                      bsf):
-    """Reference can be seen in the source code of UCR DTW."""
+    """Reference can be seen in the source code of UCR DTW function lb_kim_hierarchy."""
     # 1 point at front and back
     lb_kim = 0
     lb_kim += (dist(ts_query[0], ts_candidate[0]) + dist(ts_query[-1], ts_candidate[-1]))
@@ -121,29 +123,70 @@ def lb_kim_hierarchy(ts_query,
     return lb_kim
 
 
+@njit
 def lb_keogh_cumulative(ts_query_index_order,
                         ts_query_lb,
                         ts_query_ub,
+                        ts_query_cb,
                         ts_candidate,
                         bsf):
-    lb_keogh_ = 0
-    for i in range(len(ts_candidate)):
+    lb_keogh_, bsf = 0, bsf**2
+    for i in prange(len(ts_candidate)):
         d = 0
         if ts_candidate[ts_query_index_order[i]] > ts_query_ub[ts_query_index_order[i]]:
             d = dist(ts_candidate[ts_query_index_order[i]], ts_query_ub[ts_query_index_order[i]])
         elif ts_candidate[ts_query_index_order[i]] < ts_query_lb[ts_query_index_order[i]]:
             d = dist(ts_candidate[ts_query_index_order[i]], ts_query_lb[ts_query_index_order[i]])
+
         lb_keogh_ += d
-
+        ts_query_cb[ts_query_index_order[i]] = d
         if lb_keogh_ > bsf:
-            return lb_keogh_
-    return lb_keogh_**0.5
+            return lb_keogh_**0.5, ts_query_cb
+    return lb_keogh_**0.5, ts_query_cb
 
 
-def dtw_early_stop(ts_query,
-                   ts_candidate,
-                   bsf):
-    pass
+def dtw_ucrdtw(ts_x,
+               ts_y,
+               cb_cum,
+               window_size=5,
+               bsf=np.inf):
+    """
+    ----------
+    Author: Michael Yin
+    E-Mail: zhuoyin94@163.com
+    ----------
+
+    @Description:
+    ----------
+    Dynamic Time Warping(DTW) Distance with early stopping and the
+    Sakoe-Chiba Band. The time complexity is O(n^2), but strictly less
+    than O(n^2). The space complexity is O(window_size).
+
+    @Parameters:
+    ----------
+    ts_x: {array-like}
+        The time series x.
+    ts_y: {array-like}
+        The time series y.
+    cb_cum: {array-like}
+        Cummulative bound of lb_keogh array in the reverse form.
+    window_size: {int-like}
+        The window size of sakoe-chiba band.
+    bsf: {float-like}
+        The best-so-far query dtw distance.
+
+    @Return:
+    ----------
+    dtw distance between ts_x and ts_y
+    """
+
+
+@njit
+def lb_keogh_reverse_cumulative(cb, cb_cum):
+    cb_cum[len(cb_cum)-1] = cb[len(cb)-1]
+    for i in prange(len(cb_cum)-2, 0-1, -1):
+        cb_cum[i] = cb_cum[i+1] + cb[i]
+    return cb_cum
 
 
 if __name__ == "__main__":
@@ -155,20 +198,34 @@ if __name__ == "__main__":
     for i in range(N_TS_GENERATING):
         dataset.append(get_z_normalized_ts(np.random.rand(LEN_TS)))
 
-    ts_x_ind, ts_y_ind = 11, 50
-    ts_x, ts_y = dataset[ts_x_ind], dataset[ts_y_ind]
-    ts_order_x, ts_order_y = np.argsort(np.abs(ts_x))[::-1], np.argsort(np.abs(ts_y))[::-1]
+    ts_query_ind, ts_candidate_ind = 22, 50
+    ts_query, ts_candidate = dataset[ts_query_ind], dataset[ts_candidate_ind]
+    ts_query_ind_ordered, ts_candidate_ind_ordered = np.argsort(np.abs(ts_query))[::-1], np.argsort(np.abs(ts_candidate))[::-1]
 
     # lb_kim_hierarchy
-    lb_kim = lb_kim_hierarchy(ts_x, ts_y, 3.5)
+    lb_kim = lb_kim_hierarchy(ts_query, ts_candidate, 3.5)
 
     # lb_keogh_cumulative
-    lb_keogh_lb, lb_keogh_ub = lb_envelope(ts_x, radius=30)
-    lb_keogh_original = lb_keogh(ts_y, None,
-                                 envelope_candidate=(lb_keogh_lb, lb_keogh_ub))
-    lb_keogh_new = lb_keogh_cumulative(ts_order_x,
-                                       lb_keogh_lb,
-                                       lb_keogh_ub,
-                                       ts_y,
-                                       0.1)
+    cb, cb_ec = np.empty(len(ts_query)), np.empty(len(ts_query))
+    lb_keogh_query, ub_keogh_query = lb_envelope(ts_query, radius=30)
+    lb_keogh_query, ub_keogh_query = lb_keogh_query.reshape(-1, ), ub_keogh_query.reshape(-1, )
 
+    lb_keogh_candidate, ub_keogh_candidate = lb_envelope(ts_candidate, radius=30)
+    lb_keogh_candidate, ub_keogh_candidate = lb_keogh_candidate.reshape(-1, ), ub_keogh_candidate.reshape(-1, )
+
+    lb_keogh_original, cb = lb_keogh_cumulative(ts_query_ind_ordered,
+                                                lb_keogh_query,
+                                                ub_keogh_query,
+                                                cb,
+                                                ts_candidate,
+                                                np.inf)
+
+    lb_keogh_ec, cb_ec = lb_keogh_cumulative(ts_candidate_ind_ordered, 
+                                             lb_keogh_candidate,
+                                             ub_keogh_candidate,
+                                             cb_ec,
+                                             ts_query,
+                                             np.inf)
+
+    cb_cum = np.zeros((len(ts_query, )))
+    cb_cum = lb_keogh_reverse_cumulative(cb, cb_cum)

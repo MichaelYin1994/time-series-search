@@ -17,6 +17,7 @@ from utils import LoadSave, dtw_early_stop
 from time import time
 from tqdm import tqdm
 import heapq as hq
+from numba import njit, prange
 
 sns.set(style="ticks", font_scale=1.2, palette='deep', color_codes=True)
 np.random.seed(2019)
@@ -44,13 +45,36 @@ def preprocessing_ts(ts=None, envelope_radius=30):
     lb_keogh_down, lb_keogh_up = lb_envelope(ts_norm, radius=envelope_radius)
 
     # Step 3: Argsort the ts
-    ts_ind_ordered = np.argsort(ts_norm)[::-1]
+    ts_ind_ordered = np.argsort(np.abs(ts_norm))[::-1]
 
-    return np.array([min_ind, max_ind, min_val, max_val]), ts_norm, lb_keogh_down, lb_keogh_up, ts_ind_ordered
+    return np.array([min_ind, max_ind, min_val, max_val]), ts_norm, lb_keogh_down.reshape(-1, ), lb_keogh_up.reshape(-1, ), ts_ind_ordered
 
 
+@njit
 def dist(x, y):
     return (x-y)*(x-y)
+
+
+@njit
+def lb_keogh_cumulative(ts_query_index_order,
+                        ts_query_lb,
+                        ts_query_ub,
+                        ts_query_cb,
+                        ts_candidate,
+                        bsf):
+    lb_keogh_, bsf = 0, bsf**2
+    for i in prange(len(ts_candidate)):
+        d = 0
+        if ts_candidate[ts_query_index_order[i]] > ts_query_ub[ts_query_index_order[i]]:
+            d = dist(ts_candidate[ts_query_index_order[i]], ts_query_ub[ts_query_index_order[i]])
+        elif ts_candidate[ts_query_index_order[i]] < ts_query_lb[ts_query_index_order[i]]:
+            d = dist(ts_candidate[ts_query_index_order[i]], ts_query_lb[ts_query_index_order[i]])
+
+        lb_keogh_ += d
+        ts_query_cb[ts_query_index_order[i]] = d
+        if lb_keogh_ > bsf:
+            return lb_keogh_**0.5, ts_query_cb
+    return lb_keogh_**0.5, ts_query_cb
 
 
 def lb_kim_hierarchy(ts_query, ts_candidate, bsf):
@@ -112,7 +136,10 @@ def lb_kim_hierarchy(ts_query, ts_candidate, bsf):
     return lb_kim
 
 
-def search_top_n_similar_ts(ts_query_compact=None, data_compact=None, n=10, verbose=False):
+def search_top_n_similar_ts(ts_query_compact=None,
+                            data_compact=None,
+                            n=10,
+                            verbose=False):
     """For the query ts, search the top-n similar ts in data object, return
        the searching result.
     """
@@ -125,11 +152,12 @@ def search_top_n_similar_ts(ts_query_compact=None, data_compact=None, n=10, verb
     start = time()
     ts_query = ts_query_compact[1]
     ts_query_ind_ordered = ts_query_compact[4]
-    lb_keogh_query_down, lb_keogh_query_up = ts_query_compact[2], ts_query_compact[3]
+    lb_keogh_query, ub_keogh_query = ts_query_compact[2], ts_query_compact[3]
 
     for ind, ts_candidate_compact in enumerate(data_compact):
         ts_candidate = ts_candidate_compact[1]
-        lb_keogh_candidate_down, lb_keogh_candidate_up = ts_candidate_compact[2], ts_candidate_compact[3]
+        ts_candidate_ind_ordered = ts_candidate_compact[4]
+        lb_keogh_candidate, ub_keogh_candidate = ts_candidate_compact[2], ts_candidate_compact[3]
 
         # Initializing minimum heap(n + 1 for excluding itself)
         if len(min_heap) < n + 1:
@@ -139,6 +167,7 @@ def search_top_n_similar_ts(ts_query_compact=None, data_compact=None, n=10, verb
             continue
 
         bsf = min_heap[0][0]
+        cb, cb_ec = np.empty(len(ts_query)), np.empty(len(ts_query))
         # STEP 1: lb_kim_hierarchy puring
         # -------------------        
         lb_kim = -lb_kim_hierarchy(ts_query, ts_candidate, -bsf)
@@ -164,14 +193,24 @@ def search_top_n_similar_ts(ts_query_compact=None, data_compact=None, n=10, verb
 
         # STEP 2: LB_Keogh puring(Including exchange)
         # -------------------
-        lb_keogh_original = -lb_keogh(ts_query, None,
-                                      envelope_candidate=(lb_keogh_candidate_down, lb_keogh_candidate_up))
+        lb_keogh_original, cb = lb_keogh_cumulative(ts_query_ind_ordered,
+                                                    lb_keogh_query,
+                                                    ub_keogh_query,
+                                                    cb,
+                                                    ts_candidate,
+                                                    -bsf)
+        lb_keogh_original = -lb_keogh_original
         if lb_keogh_original < bsf:
             lb_keogh_puring_count += 1
             continue
 
-        lb_keogh_ec = -lb_keogh(ts_candidate, None,
-                                envelope_candidate=(lb_keogh_query_down, lb_keogh_query_up))
+        lb_keogh_ec, cb_ec = lb_keogh_cumulative(ts_candidate_ind_ordered, 
+                                                 lb_keogh_candidate,
+                                                 ub_keogh_candidate,
+                                                 cb_ec,
+                                                 ts_query,
+                                                 -bsf)
+        lb_keogh_ec = -lb_keogh_ec
         if lb_keogh_ec < bsf:
             lb_keogh_ec_puring_count += 1
             continue
@@ -186,7 +225,7 @@ def search_top_n_similar_ts(ts_query_compact=None, data_compact=None, n=10, verb
             continue
         else:
             hq.heapreplace(min_heap, [dtw_dist, ind])
-        # top_n_searching_res.append([ind, dtw_dist, end-start])
+
     end = time()
     time_spend = end - start
 
