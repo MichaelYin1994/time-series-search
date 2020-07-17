@@ -46,7 +46,6 @@ def preprocessing_ts(ts=None, envelope_radius=30):
 
     # Step 3: Argsort the ts
     ts_ind_ordered = np.argsort(np.abs(ts_norm))[::-1]
-
     return np.array([min_ind, max_ind, min_val, max_val]), ts_norm, lb_keogh_down.reshape(-1, ), lb_keogh_up.reshape(-1, ), ts_ind_ordered
 
 
@@ -79,7 +78,7 @@ def lb_keogh_cumulative(ts_query_index_order,
 
 def lb_kim_hierarchy(ts_query, ts_candidate, bsf):
     """Reference can be seen in the source code of UCR DTW."""
-    # 1 point at front and back
+    # 1 point at front and end
     lb_kim = 0
     lb_kim += (dist(ts_query[0], ts_candidate[0]) + dist(ts_query[-1], ts_candidate[-1]))
     if lb_kim > bsf:
@@ -267,6 +266,12 @@ def search_top_n_similar_ts(ts_query_compact=None,
     searching_res["total_searched_ts"] = len(data)
     searching_res["total_computed_ts_precent"] = (1 - lb_kim_puring_count/len(data) - lb_keogh_puring_count/len(data) - lb_keogh_ec_puring_count/len(data)) * 100
     searching_res["total_time_spend"] = time_spend
+
+    searching_res["LB_Kim"] = lb_kim_puring_count/len(data) * 100
+    searching_res["LB_Keogh"] = lb_keogh_puring_count/len(data) * 100
+    searching_res["LB_Keogh_EC"] = lb_keogh_ec_puring_count/len(data) * 100
+    searching_res["ES_Puring"] = es_puring_count/len(data) * 100
+    searching_res["DTW_count"] = (1 - lb_kim_puring_count/len(data) - lb_keogh_puring_count/len(data) - lb_keogh_ec_puring_count/len(data)) * 100
     return searching_res
 
 
@@ -311,6 +316,10 @@ if __name__ == "__main__":
         time_accelerate, error_rate = [], []
         time_spend, computed_precent = [], []
 
+        precent_lb_kim_puring = []
+        precent_early_stop_puring = []
+        precent_lb_keogh_puring, precent_lb_keogh_ec_puring = [], []
+        precent_dtw = []
         for ts_ind in tqdm(selected_ts_ind):
             ts_query_compact = data_compact[ts_ind]
             search_res[ts_ind] = search_top_n_similar_ts(ts_query_compact, data_compact,
@@ -327,14 +336,18 @@ if __name__ == "__main__":
 
             error = 0
             if checking_res != TOP_N_SEARCH:
-                # print("[ERROR] MIS-MATCHING: {:.5f}%".format((TOP_N_SEARCH - checking_res)/TOP_N_SEARCH * 100))
                 error = 1
-            # print("\n")
 
             time_spend.append(search_res[ts_ind]["total_time_spend"])
             time_accelerate.append(benchmark["total_time_spend"] / search_res[ts_ind]["total_time_spend"])
             computed_precent.append(search_res[ts_ind]["total_computed_ts_precent"])
             error_rate.append(error)
+
+            precent_lb_kim_puring.append(search_res[ts_ind]["LB_Kim"])
+            precent_early_stop_puring.append(search_res[ts_ind]["ES_Puring"])
+            precent_lb_keogh_puring.append(search_res[ts_ind]["LB_Keogh"])
+            precent_lb_keogh_ec_puring.append(search_res[ts_ind]["LB_Keogh_EC"])
+            precent_dtw.append(search_res[ts_ind]["DTW_count"])
 
         # STEP 3: Save the SEARCH_TOP_N results in experiment_res
         experiment_total_res[name] = search_res
@@ -347,6 +360,16 @@ if __name__ == "__main__":
         print("[INFO] Computed precent each query: {:.5f}% +- {:.5f}%".format(
             np.mean(computed_precent), np.std(computed_precent)))
         print("[INFO] Error rate: {:.5f}".format(sum(error_rate) / N_NEED_SEARCH))
+        print("[INFO] Puring precent(LB_Kim): {:.5f}%".format(
+            np.mean(precent_lb_kim_puring)))
+        print("[INFO] Puring precent(LB_Keogh): {:.5f}%".format(
+            np.mean(precent_lb_keogh_puring)))
+        print("[INFO] Puring precent(LB_Keogh_EC): {:.5f}%".format(
+            np.mean(precent_lb_keogh_ec_puring)))
+        print("[INFO] Puring precent(Early Stopping): {:.5f}%".format(
+            np.mean(precent_early_stop_puring)))
+        print("[INFO] DTW count: {:.5f}%".format(
+            np.mean(precent_dtw)))
 
     # file_processor = LoadSave()
     # new_file_name = ".//data_tmp//" + target_dataset_name + "_ucrdtw_searching_res.pkl"
