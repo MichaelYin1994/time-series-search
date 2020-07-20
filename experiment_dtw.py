@@ -15,6 +15,7 @@ from time import time
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import scipy
 from tslearn.metrics import dtw
 from utils import LoadSave, lb_kim_hierarchy
 from tqdm import tqdm
@@ -37,12 +38,12 @@ def sample_n_ts(data=None, n=50):
 
 
 def get_z_normalized_ts(ts=None):
-    mean_val, std_val = np.mean(ts), np.std(ts)
+    mean_val, std_val = np.mean(ts, axis=0), np.std(ts, axis=0)
+    return (ts - mean_val) / std_val
 
-    if std_val == 0:
-        return ts
-    else:
-        return (ts - mean_val) / std_val
+
+def get_unnorm_ts(ts=None):
+    return ts
 
 
 def search_top_n_similar_ts(ts_query=None,
@@ -68,7 +69,7 @@ def search_top_n_similar_ts(ts_query=None,
         # -------------------
         bsf = min_heap[0][0]
         if use_lb_kim:
-            lb_kim = -lb_kim_hierarchy(ts_query, ts_candidate, -bsf)
+            lb_kim = -lb_kim_hierarchy(ts_query, ts_candidate, -bsf**2)
             if lb_kim < bsf:
                 lb_kim_puring_count += 1
                 continue
@@ -95,12 +96,13 @@ def search_top_n_similar_ts(ts_query=None,
 
 
 if __name__ == "__main__":
-    N_INSTANCE_NEED_TO_SEARCH = 468
-    KEEP_TOP_N = 32
+    N_INSTANCE_NEED_TO_SEARCH = 249
+    KEEP_TOP_N = 1
     DATA_PATH = ".//data//"
-    TARGET_DATASET_NAME = "human_activity_recognition"
+    TARGET_DATASET_NAME = "heartbeat_mit" # human_activity_recognition
     USE_LB_KIM = True
     CHECK_1NN_ACC = True
+    NORM_TS = False
     SAVE_EXPERIMENT_RESULTS = False
 
     # Loading all dataset with key word: TARGET_DATASET_NAME
@@ -118,19 +120,24 @@ if __name__ == "__main__":
     # Search TOP-N for each selected sequence
     for data, data_label, name in zip(raw_dataset, raw_label, dataset_names):
         # STEP 0: preprocessing ts(Normalized, Filtering outlier)
-        data = [get_z_normalized_ts(ts) for ts in data]
+        data_norm = []
+        for ts in data:
+            if NORM_TS:
+                data_norm.append(get_z_normalized_ts(ts))
+            else:
+                data_norm.append(get_unnorm_ts(ts))
 
         # STEP 1: Randomly sampled n ts from the raw dataset
-        selected_ts_ind = sample_n_ts(data, n=N_INSTANCE_NEED_TO_SEARCH)
+        selected_ts_ind = sample_n_ts(data_norm, n=N_INSTANCE_NEED_TO_SEARCH)
 
         # STEP 2: For each selected ts, search TOP_K_NEED_SEARCH ts in the raw dataset,
         #         return the top-k list results.
         search_res, acc_list = {}, []
         print("\n[INFO] DATASET NAME: {}".format(name))
         for ts_ind in tqdm(selected_ts_ind):
-            ts_query = data[ts_ind]
+            ts_query = data_norm[ts_ind]
             search_res[ts_ind] = search_top_n_similar_ts(ts_query,
-                                                         data,
+                                                         data_norm,
                                                          n=KEEP_TOP_N,
                                                          use_lb_kim=USE_LB_KIM)
 

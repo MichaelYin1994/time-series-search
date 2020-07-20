@@ -104,7 +104,7 @@ def preprocessing_heartbeat_mit(n_data_list=None):
 
     heartbeat_label_list = heartbeat_data[data_labels].astype(int).tolist()
     heartbeat_data = heartbeat_data[data_cols].values
-    heartbeat_data_list = heartbeat_data.tolist()
+    heartbeat_data_list = [item.reshape((-1, 1)) for item in heartbeat_data]
 
     # Save the proprocessed data
     for ind in range(len(n_data_list)):
@@ -136,7 +136,7 @@ def preprocessing_heartbeat_ptbdb(n_data_list=None):
 
     heartbeat_label_list = heartbeat_data[data_labels].astype(int).tolist()
     heartbeat_data = heartbeat_data[data_cols].values
-    heartbeat_data_list = heartbeat_data.tolist()
+    heartbeat_data_list = [item.reshape((-1, 1)) for item in heartbeat_data]
 
     # Save the proprocessed data
     for ind in range(len(n_data_list)):
@@ -159,7 +159,6 @@ def preprocessing_HAR(n_data_list=None):
     file_processor = LoadSave()
     har_dataset, har_dataset_label = file_processor.load_data(
         path="..//demo_dataset//human_activity_recognition//human_activity_recognition.pkl")
-    har_dataset = har_dataset.reshape((-1, 8, 62))
 
     for ind in range(len(n_data_list)):
         if n_data_list[ind] is None:

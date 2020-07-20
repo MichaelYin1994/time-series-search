@@ -36,7 +36,7 @@ def timefn(fcn):
 
 @njit
 def dist(x, y):
-    return (x-y)*(x-y)
+    return np.sum((x-y)*(x-y))
 
 
 @njit
