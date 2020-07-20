@@ -100,6 +100,9 @@ def preprocessing_heartbeat_mit(n_data_list=None):
     heartbeat_data = heartbeat_data.sample(frac=1).reset_index(drop=True)
 
     data_cols = [i for i in range(heartbeat_data.shape[1] - 1)]
+    data_labels = int(heartbeat_data.shape[1]) - 1
+
+    heartbeat_label_list = heartbeat_data[data_labels].astype(int).tolist()
     heartbeat_data = heartbeat_data[data_cols].values
     heartbeat_data_list = heartbeat_data.tolist()
 
@@ -113,11 +116,14 @@ def preprocessing_heartbeat_mit(n_data_list=None):
     file_processor = LoadSave()
     for ind, item in enumerate(n_data_list):
         tmp_data = heartbeat_data_list[:item]
+        tmp_data_label = heartbeat_label_list[:item]
+
         tmp_file_name = file_name[ind]
-        file_processor.save_data(path=tmp_file_name, data=tmp_data)
+        file_processor.save_data(path=tmp_file_name,
+                                 data=[tmp_data, tmp_data_label])
 
 
-def preprocessing_heartbeat_ptb(n_data_list=None):
+def preprocessing_heartbeat_ptbdb(n_data_list=None):
     tmp_data_0 = pd.read_csv("..//demo_dataset//heartbeat//heartbeat//ptbdb_normal.csv",
                                  nrows=None, header=None)
     tmp_data_1 = pd.read_csv("..//demo_dataset//heartbeat//heartbeat//ptbdb_abnormal.csv",
@@ -126,6 +132,9 @@ def preprocessing_heartbeat_ptb(n_data_list=None):
     heartbeat_data = heartbeat_data.sample(frac=1).reset_index(drop=True)
 
     data_cols = [i for i in range(heartbeat_data.shape[1] - 1)]
+    data_labels = int(heartbeat_data.shape[1]) - 1
+
+    heartbeat_label_list = heartbeat_data[data_labels].astype(int).tolist()
     heartbeat_data = heartbeat_data[data_cols].values
     heartbeat_data_list = heartbeat_data.tolist()
 
@@ -139,15 +148,41 @@ def preprocessing_heartbeat_ptb(n_data_list=None):
     file_processor = LoadSave()
     for ind, item in enumerate(n_data_list):
         tmp_data = heartbeat_data_list[:item]
+        tmp_data_label = heartbeat_label_list[:item]
+
         tmp_file_name = file_name[ind]
-        file_processor.save_data(path=tmp_file_name, data=tmp_data)
+        file_processor.save_data(path=tmp_file_name,
+                                 data=[tmp_data, tmp_data_label])
+
+
+def preprocessing_HAR(n_data_list=None):
+    file_processor = LoadSave()
+    har_dataset, har_dataset_label = file_processor.load_data(
+        path="..//demo_dataset//human_activity_recognition//human_activity_recognition.pkl")
+    har_dataset = har_dataset.reshape((-1, 8, 62))
+
+    for ind in range(len(n_data_list)):
+        if n_data_list[ind] is None:
+            n_data_list[ind] = len(har_dataset)
+
+    file_name = [".//data//human_activity_recognition_{}.pkl".format(i)
+                 for i in n_data_list]
+    file_processor = LoadSave()
+    for ind, item in enumerate(n_data_list):
+        tmp_data = har_dataset[:item]
+        tmp_data_label = har_dataset_label[:item]
+
+        tmp_file_name = file_name[ind]
+        file_processor.save_data(path=tmp_file_name,
+                                 data=[tmp_data, tmp_data_label])
 
 
 if __name__ == "__main__":
-    n_data_list = [8192, 16384, None]
-
-    # preprocessing_fashion_mnist(n_data_list)
-    # preprocessing_mnist(n_data_list)
+    n_data_list = [512, 8192, 16384, None]
     preprocessing_heartbeat_mit(n_data_list.copy())
-    preprocessing_heartbeat_ptb(n_data_list.copy())
-    preprocessing_turnout(n_data_list.copy())
+
+    n_data_list = [512, 8192, None]
+    preprocessing_heartbeat_ptbdb(n_data_list.copy())
+
+    n_data_list = [512, None]
+    preprocessing_HAR(n_data_list.copy())
