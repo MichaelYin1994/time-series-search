@@ -55,13 +55,11 @@ def search_top_n_similar_ts(ts_query=None,
     """
     start = time()
     min_heap, time_spend = [], 0
-    lb_kim_puring_count = 0
 
     for ind, ts_candidate in enumerate(data):
         # Initializing minimum heap(n + 1 for excluding itself)
         if len(min_heap) < n + 1:
             dtw_dist = -dtw(ts_query, ts_candidate)
-            # dtw_dist = -dtw(ts_query, ts_candidate_compact[1])
             hq.heappush(min_heap, [dtw_dist, ind])
             continue
 
@@ -71,7 +69,6 @@ def search_top_n_similar_ts(ts_query=None,
         if use_lb_kim:
             lb_kim = -lb_kim_hierarchy(ts_query, ts_candidate, -bsf**2)
             if lb_kim < bsf:
-                lb_kim_puring_count += 1
                 continue
 
         # STEP 2: DTW calculation
@@ -96,19 +93,22 @@ def search_top_n_similar_ts(ts_query=None,
 
 
 if __name__ == "__main__":
-    N_INSTANCE_NEED_TO_SEARCH = 249
-    KEEP_TOP_N = 1
+    N_INSTANCE_NEED_TO_SEARCH = 512
+    KEEP_TOP_N = 16
     DATA_PATH = ".//data//"
-    TARGET_DATASET_NAME = "heartbeat_mit" # human_activity_recognition
+
+    # human_activity_recognition, heartbeat_mit, heartbeat_ptbdb
+    TARGET_DATASET_NAME = "heartbeat_ptbdb"
     USE_LB_KIM = True
     CHECK_1NN_ACC = True
-    NORM_TS = False
-    SAVE_EXPERIMENT_RESULTS = False
+    NORM_TS = True
+    SAVE_EXPERIMENT_RESULTS = True
+    ###########################################################################
 
     # Loading all dataset with key word: TARGET_DATASET_NAME
     dataset_names = os.listdir(DATA_PATH)
     dataset_names = [name for name in dataset_names if TARGET_DATASET_NAME in name]
-    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))[:1]
+    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))
 
     dataset = [load_data(DATA_PATH+name) for name in dataset_names]
     raw_dataset = [item[0] for item in dataset]
@@ -118,6 +118,7 @@ if __name__ == "__main__":
     experiment_total_res = {name: None for name in dataset_names}
 
     # Search TOP-N for each selected sequence
+    # -------------------
     for data, data_label, name in zip(raw_dataset, raw_label, dataset_names):
         # STEP 0: preprocessing ts(Normalized, Filtering outlier)
         data_norm = []
@@ -143,13 +144,16 @@ if __name__ == "__main__":
 
             if CHECK_1NN_ACC:
                 one_nn_label = data_label[search_res[ts_ind]["top_n_searching_res"][0][1]]
+                one_nn_dist = search_res[ts_ind]["top_n_searching_res"][0][0]
+
                 true_label = data_label[ts_ind]
                 acc_list.append(one_nn_label == true_label)
 
         # STEP 3: Save the SEARCH_TOP_K results in experiment_res
         experiment_total_res[name] = search_res
         if CHECK_1NN_ACC:
-            print("\n[INFO] Mean 1-NN accuracy: {:.5f}".format(np.mean(acc_list)))
+            print("\n[INFO] Mean 1-NN accuracy: {:.5f}.".format(
+                np.mean(acc_list)))
 
     if SAVE_EXPERIMENT_RESULTS:
         file_processor = LoadSave()

@@ -159,6 +159,14 @@ def preprocessing_HAR(n_data_list=None):
     file_processor = LoadSave()
     har_dataset, har_dataset_label = file_processor.load_data(
         path="..//demo_dataset//human_activity_recognition//human_activity_recognition.pkl")
+    har_dataset_label = np.array(har_dataset_label)
+
+    # Shuffle the dataset
+    ind = np.random.choice(np.arange(0, len(har_dataset_label)),
+                           size=len(har_dataset_label),
+                           replace=False)
+    har_dataset = har_dataset[ind]
+    har_dataset_label = har_dataset_label[ind]
 
     for ind in range(len(n_data_list)):
         if n_data_list[ind] is None:
@@ -177,11 +185,11 @@ def preprocessing_HAR(n_data_list=None):
 
 
 if __name__ == "__main__":
-    n_data_list = [512, 8192, 16384, None]
-    preprocessing_heartbeat_mit(n_data_list.copy())
+    # n_data_list = [512, 8192, 16384, None]
+    # preprocessing_heartbeat_mit(n_data_list.copy())
 
-    n_data_list = [512, 8192, None]
-    preprocessing_heartbeat_ptbdb(n_data_list.copy())
+    # n_data_list = [512, 8192, None]
+    # preprocessing_heartbeat_ptbdb(n_data_list.copy())
 
     n_data_list = [512, None]
     preprocessing_HAR(n_data_list.copy())

@@ -83,7 +83,7 @@ def search_top_n_similar_ts(ts_query_compact=None,
         cb, cb_ec, cb_cum = np.empty(len(ts_query)), np.empty(len(ts_query)), np.zeros(len(ts_query))
         # STEP 1: lb_kim_hierarchy puring
         # -------------------        
-        lb_kim = -lb_kim_hierarchy(ts_query, ts_candidate, -bsf)
+        lb_kim = -lb_kim_hierarchy(ts_query, ts_candidate, -bsf**2)
         if lb_kim < bsf:
             lb_kim_puring_count += 1
             continue
