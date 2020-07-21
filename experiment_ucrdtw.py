@@ -17,11 +17,9 @@ from utils import LoadSave, dtw_ucrdtw, lb_keogh_cumulative, lb_kim_hierarchy, l
 from time import time
 from tqdm import tqdm
 import heapq as hq
-from numba import njit, prange
 
 sns.set(style="ticks", font_scale=1.2, palette='deep', color_codes=True)
 np.random.seed(2019)
-
 
 def load_data(path_name=None):
     """Loading *.pkl from path_name, path_name is like: .//data//mnist.pkl"""
@@ -29,24 +27,25 @@ def load_data(path_name=None):
     return file_processor.load_data(path=path_name)
 
 
-def preprocessing_ts(ts=None, envelope_radius=30):
+def preprocessing_ts(ts=None, envelope_radius=30, is_norm_ts=True):
     """Z-Normalized the ts, at the same time, then compute the lb_keogh for the ts."""
-    ts = np.array(ts)
-    mean_val, std_val = ts.mean(), ts.std()
-    if std_val == 0:
-        std_val = 0.00001
+    if is_norm_ts:
+        mean_val, std_val = np.mean(ts, axis=0), np.std(ts, axis=0)
+        std_val = std_val + 0.0000001
+        ts_norm = (ts - mean_val) / std_val
+    else:
+        ts_norm = ts
 
     # Step 1: statistical figures calculation
-    ts_norm = (ts - mean_val) / std_val
-    min_ind, max_ind = ts_norm.argmin(), ts_norm.argmax()
-    min_val, max_val = ts_norm.min(), ts_norm.max()
+    min_ind, max_ind = ts_norm.argmin(axis=0), ts_norm.argmax(axis=0)
+    min_val, max_val = ts_norm.min(axis=0), ts_norm.max(axis=0)
 
     # Step 2: Envelope of time series
-    lb_keogh_down, lb_keogh_up = lb_envelope(ts_norm, radius=envelope_radius)
+    lb_keogh_lb, lb_keogh_ub = lb_envelope(ts_norm, radius=envelope_radius)
 
     # Step 3: Argsort the ts
-    ts_ind_ordered = np.argsort(np.abs(ts_norm))[::-1]
-    return np.array([min_ind, max_ind, min_val, max_val]), ts_norm, lb_keogh_down.reshape(-1, ), lb_keogh_up.reshape(-1, ), ts_ind_ordered
+    ts_ind_ordered = np.argsort(np.sum(np.abs(ts_norm), axis=1))[::-1]
+    return np.array([min_ind, max_ind, min_val, max_val]), ts_norm, lb_keogh_lb, lb_keogh_ub, ts_ind_ordered
 
 
 def search_top_n_similar_ts(ts_query_compact=None,
@@ -88,21 +87,21 @@ def search_top_n_similar_ts(ts_query_compact=None,
             lb_kim_puring_count += 1
             continue
 
-        # Enhance the lb_kim using the pre-computed maximum and minimum value
-        if int(ts_query_compact[0][0]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3] \
-            and int(ts_candidate_compact[0][0]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3]:
-            pass
-        else:
-            lb_kim += -dist(ts_query_compact[0][2], ts_candidate_compact[0][2])
+        # # Enhance the lb_kim using the pre-computed maximum and minimum value
+        # if int(ts_query_compact[0][0]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3] \
+        #     and int(ts_candidate_compact[0][0]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3]:
+        #     pass
+        # else:
+        #     lb_kim += -dist(ts_query_compact[0][2], ts_candidate_compact[0][2])
 
-        if int(ts_query_compact[0][1]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3] \
-            and int(ts_candidate_compact[0][1]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3]:
-            pass
-        else:
-            lb_kim += -dist(ts_query_compact[0][3], ts_candidate_compact[0][3])
-        if lb_kim < bsf:
-            lb_kim_puring_count += 1
-            continue
+        # if int(ts_query_compact[0][1]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3] \
+        #     and int(ts_candidate_compact[0][1]) in [0, 1, 2, len(ts_query)-1, len(ts_query)-2, len(ts_query)-3]:
+        #     pass
+        # else:
+        #     lb_kim += -dist(ts_query_compact[0][3], ts_candidate_compact[0][3])
+        # if lb_kim < bsf:
+        #     lb_kim_puring_count += 1
+        #     continue
 
         # STEP 2: LB_Keogh puring(Including exchange)
         # -------------------
@@ -111,7 +110,7 @@ def search_top_n_similar_ts(ts_query_compact=None,
                                                     ub_keogh_query,
                                                     cb,
                                                     ts_candidate,
-                                                    -bsf)
+                                                    -bsf**2)
         lb_keogh_original = -lb_keogh_original
         if lb_keogh_original < bsf:
             lb_keogh_puring_count += 1
@@ -122,7 +121,7 @@ def search_top_n_similar_ts(ts_query_compact=None,
                                                  ub_keogh_candidate,
                                                  cb_ec,
                                                  ts_query,
-                                                 -bsf)
+                                                 -bsf**2)
         lb_keogh_ec = -lb_keogh_ec
         if lb_keogh_ec < bsf:
             lb_keogh_ec_puring_count += 1
@@ -155,11 +154,11 @@ def search_top_n_similar_ts(ts_query_compact=None,
     if verbose:
         print("[INFO] Time spend: {:.5f}".format(time_spend))
         print("[INFO] LB_Kim: {:.5f}%, LB_Keogh: {:.5f}%, LB_Keogh_ec: {:.5f}%, es_puring: {:.5f}%, DTW: {:.5f}%".format(
-            lb_kim_puring_count/len(data) * 100,
-            lb_keogh_puring_count/len(data) * 100,
-            lb_keogh_ec_puring_count/len(data) * 100,
-            es_puring_count/len(data) * 100,
-            (1 - lb_kim_puring_count/len(data) - lb_keogh_puring_count/len(data) - lb_keogh_ec_puring_count/len(data)) * 100))
+            lb_kim_puring_count/len(data_compact) * 100,
+            lb_keogh_puring_count/len(data_compact) * 100,
+            lb_keogh_ec_puring_count/len(data_compact) * 100,
+            es_puring_count/len(data_compact) * 100,
+            (1 - lb_kim_puring_count/len(data_compact) - lb_keogh_puring_count/len(data_compact) - lb_keogh_ec_puring_count/len(data_compact)) * 100))
 
     # Sorted the results, exclude the first results(QUery itself)
     min_heap = [[-item[0], item[1]] for item in min_heap]
@@ -167,17 +166,17 @@ def search_top_n_similar_ts(ts_query_compact=None,
 
     searching_res = {}
     searching_res["top_n_searching_res"] = min_heap
-    searching_res["mean_time_per_ts"] = time_spend / len(data)
+    searching_res["mean_time_per_ts"] = time_spend / len(data_compact)
     searching_res["std_time_per_ts"] = np.nan
-    searching_res["total_searched_ts"] = len(data)
-    searching_res["total_computed_ts_precent"] = (1 - lb_kim_puring_count/len(data) - lb_keogh_puring_count/len(data) - lb_keogh_ec_puring_count/len(data)) * 100
+    searching_res["total_searched_ts"] = len(data_compact)
+    searching_res["total_computed_ts_precent"] = (1 - lb_kim_puring_count/len(data_compact) - lb_keogh_puring_count/len(data_compact) - lb_keogh_ec_puring_count/len(data_compact)) * 100
     searching_res["total_time_spend"] = time_spend
 
-    searching_res["LB_Kim"] = lb_kim_puring_count/len(data) * 100
-    searching_res["LB_Keogh"] = lb_keogh_puring_count/len(data) * 100
-    searching_res["LB_Keogh_EC"] = lb_keogh_ec_puring_count/len(data) * 100
-    searching_res["ES_Puring"] = es_puring_count/len(data) * 100
-    searching_res["DTW_count"] = (1 - lb_kim_puring_count/len(data) - lb_keogh_puring_count/len(data) - lb_keogh_ec_puring_count/len(data)) * 100
+    searching_res["LB_Kim"] = lb_kim_puring_count/len(data_compact) * 100
+    searching_res["LB_Keogh"] = lb_keogh_puring_count/len(data_compact) * 100
+    searching_res["LB_Keogh_EC"] = lb_keogh_ec_puring_count/len(data_compact) * 100
+    searching_res["ES_Puring"] = es_puring_count/len(data_compact) * 100
+    searching_res["DTW_count"] = (1 - lb_kim_puring_count/len(data_compact) - lb_keogh_puring_count/len(data_compact) - lb_keogh_ec_puring_count/len(data_compact)) * 100
     return searching_res
 
 
@@ -187,14 +186,20 @@ def load_benchmark(dataset_name=None):
 
 
 if __name__ == "__main__":
-    N_INSTANCE_NEED_TO_SEARCH = 256
+    N_INSTANCE_NEED_TO_SEARCH = 512
     KEEP_TOP_N = 3
     DATA_PATH = ".//data//"
-    TARGET_DATASET_NAME = "heartbeat_ptbdb"
-    USE_LB_KIM = False
-    CHECK_1NN_ACC = True
-    SAVE_EXPERIMENT_RESULTS = False
+    BENCHMARK_DATA_PATH = ".//data_tmp//"
 
+    # human_activity_recognition, heartbeat_mit, heartbeat_ptbdb
+    TARGET_DATASET_NAME = "human_activity_recognition"
+    BENCHMARK_DATASET_NAME = "human_activity_recognition_baseline_top_16"
+    USE_LB_KIM = True
+    CHECK_1NN_ACC = True
+    NORM_TS = False
+    SAVE_EXPERIMENT_RESULTS = False
+    ENVELOPE_RADIUS = 30
+    ###########################################################################
     # Loading all the dataset
     # ---------------------------
     dataset_names = [name for name in os.listdir(DATA_PATH) if TARGET_DATASET_NAME in name]
@@ -206,7 +211,7 @@ if __name__ == "__main__":
     raw_label = [item[1] for item in dataset]
     experiment_total_res = {name: None for name in dataset_names}
 
-    benchmark_dataset = load_benchmark(TARGET_DATASET_NAME)
+    benchmark_dataset = load_data(path_name=BENCHMARK_DATA_PATH + BENCHMARK_DATASET_NAME + ".pkl")
     benchmark_dataset = {name: benchmark_dataset[name] for name in dataset_names}
 
     # Searching experiment start
@@ -215,7 +220,9 @@ if __name__ == "__main__":
         # STEP 0: preprocessing ts(Normalized, Filtering outlier)
         data_compact = []
         for i in range(len(data)):
-            data_compact.append(preprocessing_ts(data[i], envelope_radius=60))
+            data_compact.append(preprocessing_ts(data[i],
+                                                 envelope_radius=ENVELOPE_RADIUS,
+                                                 is_norm_ts=NORM_TS))
 
         # STEP 1: Randomly sampled n ts from the raw dataset
         selected_ts_ind = np.random.choice(list(benchmark_dataset[name].keys()),
@@ -274,6 +281,8 @@ if __name__ == "__main__":
         print("[INFO] Computed precent each query: {:.5f}% +- {:.5f}%".format(
             np.mean(computed_precent), np.std(computed_precent)))
         print("[INFO] Error rate: {:.5f}".format(sum(error_rate) / N_INSTANCE_NEED_TO_SEARCH))
+        print("[INFO] Classification Accuracy: {:.5f}".format(np.mean(acc_list)))
+
         print("[INFO] Puring precent(LB_Kim): {:.5f}%".format(
             np.mean(precent_lb_kim_puring)))
         print("[INFO] Puring precent(LB_Keogh): {:.5f}%".format(

@@ -40,6 +40,10 @@ def dist(x, y):
 
 
 @njit
+def dist_float(x, y):
+    return (x-y)*(x-y)
+
+@njit
 def dtw_ucrdtw(ts_x,
                ts_y,
                cb_cum,
@@ -161,26 +165,27 @@ def lb_keogh_reverse_cumulative(cb, cb_cum):
     return cb_cum
 
 
-@njit
+# @njit
 def lb_keogh_cumulative(ts_query_index_order,
                         ts_query_lb,
                         ts_query_ub,
                         ts_query_cb,
                         ts_candidate,
                         bsf):
-    lb_keogh_, bsf = 0, bsf**2
-    for i in prange(len(ts_candidate)):
+    lb_keogh_dist, time_steps, feat_dim = 0, ts_candidate.shape[0], ts_candidate.shape[1]
+    for i in prange(time_steps):
         d = 0
-        if ts_candidate[ts_query_index_order[i]] > ts_query_ub[ts_query_index_order[i]]:
-            d = dist(ts_candidate[ts_query_index_order[i]], ts_query_ub[ts_query_index_order[i]])
-        elif ts_candidate[ts_query_index_order[i]] < ts_query_lb[ts_query_index_order[i]]:
-            d = dist(ts_candidate[ts_query_index_order[i]], ts_query_lb[ts_query_index_order[i]])
+        for j in prange(feat_dim):
+            if ts_candidate[ts_query_index_order[i]][j] > ts_query_ub[ts_query_index_order[i]][j]:
+                d += dist_float(ts_candidate[ts_query_index_order[i]][j], ts_query_ub[ts_query_index_order[i]][j])
+            elif ts_candidate[ts_query_index_order[i]][j] < ts_query_lb[ts_query_index_order[i]][j]:
+                d += dist_float(ts_candidate[ts_query_index_order[i]][j], ts_query_lb[ts_query_index_order[i]][j])
 
-        lb_keogh_ += d
+        lb_keogh_dist += d
         ts_query_cb[ts_query_index_order[i]] = d
-        if lb_keogh_ > bsf:
-            return lb_keogh_**0.5, ts_query_cb
-    return lb_keogh_**0.5, ts_query_cb
+        if lb_keogh_dist > bsf:
+            return lb_keogh_dist**0.5, ts_query_cb
+    return lb_keogh_dist**0.5, ts_query_cb
 
 
 class LoadSave():

@@ -67,7 +67,7 @@ def search_top_n_similar_ts(ts_query=None,
         # -------------------
         bsf = min_heap[0][0]
         if use_lb_kim:
-            lb_kim = -lb_kim_hierarchy(ts_query, ts_candidate, -bsf**2)
+            lb_kim = -np.sqrt(lb_kim_hierarchy(ts_query, ts_candidate, bsf**2))
             if lb_kim < bsf:
                 continue
 
@@ -98,17 +98,17 @@ if __name__ == "__main__":
     DATA_PATH = ".//data//"
 
     # human_activity_recognition, heartbeat_mit, heartbeat_ptbdb
-    TARGET_DATASET_NAME = "heartbeat_ptbdb"
-    USE_LB_KIM = True
+    TARGET_DATASET_NAME = "human_activity_recognition"
+    USE_LB_KIM = False
     CHECK_1NN_ACC = True
-    NORM_TS = True
-    SAVE_EXPERIMENT_RESULTS = True
+    NORM_TS = False
+    SAVE_EXPERIMENT_RESULTS = False
     ###########################################################################
 
     # Loading all dataset with key word: TARGET_DATASET_NAME
     dataset_names = os.listdir(DATA_PATH)
     dataset_names = [name for name in dataset_names if TARGET_DATASET_NAME in name]
-    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))
+    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))[-1:]
 
     dataset = [load_data(DATA_PATH+name) for name in dataset_names]
     raw_dataset = [item[0] for item in dataset]
