@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jun 29 16:01:45 2020
+Created on Wed Jul 22 15:25:13 2020
 
 @author: zhuoyin94
 """
+
 
 import os
 from time import time
@@ -13,13 +14,15 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tslearn.metrics import dtw, lb_keogh, lb_envelope
 import _ucrdtw
-from utils import LoadSave, dtw_ucrdtw, lb_keogh_cumulative, lb_kim_hierarchy, lb_keogh_reverse_cumulative, dist
+from utils import LoadSave
 from time import time
 from tqdm import tqdm
 import heapq as hq
+from numba import njit, prange
 
 sns.set(style="ticks", font_scale=1.2, palette='deep', color_codes=True)
 np.random.seed(2019)
+
 
 def load_data(path_name=None):
     """Loading *.pkl from path_name, path_name is like: .//data//mnist.pkl"""
@@ -27,26 +30,169 @@ def load_data(path_name=None):
     return file_processor.load_data(path=path_name)
 
 
-def preprocessing_ts(ts=None, envelope_radius=30, is_norm_ts=True):
+def preprocessing_ts(ts=None, envelope_radius=30):
     """Z-Normalized the ts, at the same time, then compute the lb_keogh for the ts."""
-    if is_norm_ts:
-        mean_val, std_val = np.mean(ts, axis=0), np.std(ts, axis=0)
-        std_val = std_val + 0.0000001
-        ts_norm = (ts - mean_val) / std_val
-    else:
-        ts_norm = ts
+    ts = np.array(ts)
+    mean_val, std_val = ts.mean(), ts.std()
+    if std_val == 0:
+        std_val = 0.00001
 
     # Step 1: statistical figures calculation
-    min_ind, max_ind = ts_norm.argmin(axis=0), ts_norm.argmax(axis=0)
-    min_val, max_val = ts_norm.min(axis=0), ts_norm.max(axis=0)
+    ts_norm = (ts - mean_val) / std_val
+    min_ind, max_ind = ts_norm.argmin(), ts_norm.argmax()
+    min_val, max_val = ts_norm.min(), ts_norm.max()
 
     # Step 2: Envelope of time series
-    lb_keogh_lb, lb_keogh_ub = lb_envelope(ts_norm, radius=envelope_radius)
+    lb_keogh_down, lb_keogh_up = lb_envelope(ts_norm, radius=envelope_radius)
 
     # Step 3: Argsort the ts
-    ts_ind_ordered = np.argsort(np.sum(np.abs(ts_norm), axis=1))[::-1]
-    # ts_ind_ordered = np.arange(0, len(ts))
-    return np.array([min_ind, max_ind, min_val, max_val]), ts_norm, lb_keogh_lb, lb_keogh_ub, ts_ind_ordered
+    ts_ind_ordered = np.argsort(np.abs(ts_norm))[::-1]
+    return np.array([min_ind, max_ind, min_val, max_val]), ts_norm, lb_keogh_down.reshape(-1, ), lb_keogh_up.reshape(-1, ), ts_ind_ordered
+
+
+@njit
+def dist(x, y):
+    return (x-y)*(x-y)
+
+
+@njit
+def dtw_ucrdtw(ts_x,
+               ts_y,
+               cb_cum,
+               window_size=5,
+               bsf=np.inf):
+    """
+    ----------
+    Author: Michael Yin
+    E-Mail: zhuoyin94@163.com
+    ----------
+    @Description:
+    ----------
+    Dynamic Time Warping(DTW) Distance with early stopping and the
+    Sakoe-Chiba Band. The time complexity is O(n^2), but strictly less
+    than O(n^2). The space complexity is O(window_size).
+    @Parameters:
+    ----------
+    ts_x: {array-like}
+        The time series x.
+    ts_y: {array-like}
+        The time series y.
+    cb_cum: {array-like}
+        Cummulative bound of lb_keogh array in the reverse form.
+    window_size: {int-like}
+        The window size of sakoe-chiba band.
+    bsf: {float-like}
+        The best-so-far query dtw distance.
+    @Return:
+    ----------
+    dtw distance between ts_x and ts_y
+    """
+    l1, l2 = ts_x.shape[0], ts_y.shape[0]
+    cum_sum = np.full((l1+1, l2+1), np.inf)
+    cum_sum[0, 0] = 0
+
+    for i in prange(l1):
+        row_min = np.inf
+        for j in prange(l2):
+            cum_sum[i+1, j+1] = dist(ts_x[i], ts_y[j])
+            cum_sum[i+1, j+1] += min(cum_sum[i, j+1], cum_sum[i+1, j], cum_sum[i, j])
+
+            # Calculating the row min for early stopping
+            if cum_sum[i+1, j+1] < row_min:
+                row_min = cum_sum[i+1, j+1]
+
+        if (i+1 < l1) and ((row_min + cb_cum[i+1]) > bsf):
+            return None
+    return cum_sum[-1, -1]
+
+
+@njit
+def lb_keogh_cumulative(ts_query_index_order,
+                        ts_query_lb,
+                        ts_query_ub,
+                        ts_query_cb,
+                        ts_candidate,
+                        bsf):
+    lb_keogh_ = 0
+    for i in prange(len(ts_candidate)):
+        d = 0
+        if ts_candidate[ts_query_index_order[i]] > ts_query_ub[ts_query_index_order[i]]:
+            d = dist(ts_candidate[ts_query_index_order[i]], ts_query_ub[ts_query_index_order[i]])
+        elif ts_candidate[ts_query_index_order[i]] < ts_query_lb[ts_query_index_order[i]]:
+            d = dist(ts_candidate[ts_query_index_order[i]], ts_query_lb[ts_query_index_order[i]])
+
+        lb_keogh_ += d
+        ts_query_cb[ts_query_index_order[i]] = d
+        if lb_keogh_ > bsf:
+            return lb_keogh_, ts_query_cb
+    return lb_keogh_, ts_query_cb
+
+
+def lb_kim_hierarchy(ts_query, ts_candidate, bsf):
+    """Reference can be seen in the source code of UCR DTW."""
+    # 1 point at front and end
+    lb_kim = 0
+    lb_kim += (dist(ts_query[0], ts_candidate[0]) + dist(ts_query[-1], ts_candidate[-1]))
+    if lb_kim > bsf:
+        return lb_kim
+
+    # 2 points at front
+    path_dist = min(dist(ts_query[0], ts_candidate[1]),
+                    dist(ts_query[1], ts_candidate[0]),
+                    dist(ts_query[1], ts_candidate[1]))
+    lb_kim += path_dist
+    if lb_kim > bsf:
+        return lb_kim
+
+    # 2 points at end
+    path_dist = min(dist(ts_query[-2], ts_candidate[-2]),
+                    dist(ts_query[-1], ts_candidate[-2]),
+                    dist(ts_query[-2], ts_candidate[-1]))
+    lb_kim += path_dist
+    if lb_kim > bsf:
+        return lb_kim
+
+    # 3 pints at front:
+    #
+    #      0      1       2       3
+    # 0  np.inf  np.inf  np.inf  np.inf
+    # 1  np.inf   o       o       x
+    # 2  np.inf   o       o       x
+    # 3  np.inf   x       x       x
+    #
+    # Finf the minimum distance among all (x)
+    path_dist = min(dist(ts_query[2], ts_candidate[0]),
+                    dist(ts_query[2], ts_candidate[1]),
+                    dist(ts_query[2], ts_candidate[2]),
+                    dist(ts_query[1], ts_candidate[2]),
+                    dist(ts_query[0], ts_candidate[2]))
+    lb_kim += path_dist
+    if lb_kim > bsf:
+        return lb_kim
+
+    # 3 pints at end:
+    #
+    #     -3    -2    -1
+    # -3   x     x     x
+    # -2   x     o     o
+    # -1   x     o     o
+    #
+    # Finf the minimum distance among all (x)
+    path_dist = min(dist(ts_query[-3], ts_candidate[-3]),
+                    dist(ts_query[-3], ts_candidate[-2]),
+                    dist(ts_query[-3], ts_candidate[-1]),
+                    dist(ts_query[-2], ts_candidate[-3]),
+                    dist(ts_query[-1], ts_candidate[-3]))
+    lb_kim += path_dist
+    return lb_kim
+
+
+@njit
+def lb_keogh_reverse_cumulative(cb, cb_cum):
+    cb_cum[len(cb_cum)-1] = cb[len(cb)-1]
+    for i in prange(len(cb_cum)-2, 0-1, -1):
+        cb_cum[i] = cb_cum[i+1] + cb[i]
+    return cb_cum
 
 
 def search_top_n_similar_ts(ts_query_compact=None,
@@ -154,34 +300,34 @@ def search_top_n_similar_ts(ts_query_compact=None,
     if verbose:
         print("[INFO] Time spend: {:.5f}".format(time_spend))
         print("[INFO] LB_Kim: {:.5f}%, LB_Keogh: {:.5f}%, LB_Keogh_ec: {:.5f}%, es_puring: {:.5f}%, DTW: {:.5f}%".format(
-            lb_kim_puring_count/len(data_compact) * 100,
-            lb_keogh_puring_count/len(data_compact) * 100,
-            lb_keogh_ec_puring_count/len(data_compact) * 100,
-            es_puring_count/len(data_compact) * 100,
-            (1 - lb_kim_puring_count/len(data_compact) - lb_keogh_puring_count/len(data_compact) - lb_keogh_ec_puring_count/len(data_compact)) * 100))
+            lb_kim_puring_count/len(data) * 100,
+            lb_keogh_puring_count/len(data) * 100,
+            lb_keogh_ec_puring_count/len(data) * 100,
+            es_puring_count/len(data) * 100,
+            (1 - lb_kim_puring_count/len(data) - lb_keogh_puring_count/len(data) - lb_keogh_ec_puring_count/len(data)) * 100))
 
     # Sorted the results, exclude the first results(QUery itself)
-    min_heap = [[-item[0], item[1]] for item in min_heap]
-    min_heap = sorted(min_heap, key=lambda x: x[0])[1:]
+    min_heap = [[item[1], -item[0]] for item in min_heap]
+    min_heap = sorted(min_heap, key=lambda x: x[1])[1:]
 
     searching_res = {}
     searching_res["top_n_searching_res"] = min_heap
-    searching_res["mean_time_per_ts"] = time_spend / len(data_compact)
+    searching_res["mean_time_per_ts"] = time_spend / len(data)
     searching_res["std_time_per_ts"] = np.nan
-    searching_res["total_searched_ts"] = len(data_compact)
-    searching_res["total_computed_ts_precent"] = (1 - lb_kim_puring_count/len(data_compact) - lb_keogh_puring_count/len(data_compact) - lb_keogh_ec_puring_count/len(data_compact)) * 100
+    searching_res["total_searched_ts"] = len(data)
+    searching_res["total_computed_ts_precent"] = (1 - lb_kim_puring_count/len(data) - lb_keogh_puring_count/len(data) - lb_keogh_ec_puring_count/len(data)) * 100
     searching_res["total_time_spend"] = time_spend
 
-    searching_res["LB_Kim"] = lb_kim_puring_count/len(data_compact) * 100
-    searching_res["LB_Keogh"] = lb_keogh_puring_count/len(data_compact) * 100
-    searching_res["LB_Keogh_EC"] = lb_keogh_ec_puring_count/len(data_compact) * 100
-    searching_res["ES_Puring"] = es_puring_count/len(data_compact) * 100
-    searching_res["DTW_count"] = (1 - lb_kim_puring_count/len(data_compact) - lb_keogh_puring_count/len(data_compact) - lb_keogh_ec_puring_count/len(data_compact)) * 100
+    searching_res["LB_Kim"] = lb_kim_puring_count/len(data) * 100
+    searching_res["LB_Keogh"] = lb_keogh_puring_count/len(data) * 100
+    searching_res["LB_Keogh_EC"] = lb_keogh_ec_puring_count/len(data) * 100
+    searching_res["ES_Puring"] = es_puring_count/len(data) * 100
+    searching_res["DTW_count"] = (1 - lb_kim_puring_count/len(data) - lb_keogh_puring_count/len(data) - lb_keogh_ec_puring_count/len(data)) * 100
     return searching_res
 
 
 def load_benchmark(dataset_name=None):
-    benchmark_dataset = load_data(path_name=".//data_tmp//" + dataset_name + "_baseline_searching_res.pkl")
+    benchmark_dataset = load_data(path_name=".//data_tmp//" + dataset_name + "_baseline_top_16.pkl")
     return benchmark_dataset
 
 
@@ -219,9 +365,8 @@ if __name__ == "__main__":
         # STEP 0: preprocessing ts(Normalized, Filtering outlier)
         data_compact = []
         for i in range(len(data)):
-            data_compact.append(preprocessing_ts(data[i],
-                                                 envelope_radius=ENVELOPE_RADIUS,
-                                                 is_norm_ts=NORM_TS))
+            data_compact.append(preprocessing_ts(data[i].reshape((-1, )),
+                                                 envelope_radius=ENVELOPE_RADIUS))
 
         # STEP 1: Randomly sampled n ts from the raw dataset
         selected_ts_ind = np.random.choice(list(benchmark_dataset[name].keys()),
@@ -242,11 +387,14 @@ if __name__ == "__main__":
             ts_query_compact = data_compact[ts_ind]
             search_res[ts_ind] = search_top_n_similar_ts(ts_query_compact, data_compact,
                                                          n=KEEP_TOP_N, verbose=False)
+
             benchmark = benchmark_dataset[name][ts_ind]
+            # print("[INFO] Time accelerate: {:.5f}".format(
+            #     benchmark["total_time_spend"] / search_res_tmp["total_time_spend"]))
 
             # Accuracy checking
             benchmark_res_tmp = [item[1] for item in benchmark["top_n_searching_res"][:KEEP_TOP_N]]
-            search_res_tmp = [item[1] for item in search_res[ts_ind]["top_n_searching_res"]]
+            search_res_tmp = [item[0] for item in search_res[ts_ind]["top_n_searching_res"]]
             checking_res = (np.array(search_res_tmp) == np.array(benchmark_res_tmp)).sum()
 
             error = 0
@@ -265,7 +413,7 @@ if __name__ == "__main__":
             precent_dtw.append(search_res[ts_ind]["DTW_count"])
 
             if CHECK_1NN_ACC:
-                one_nn_label = data_label[search_res[ts_ind]["top_n_searching_res"][0][1]]
+                one_nn_label = data_label[search_res[ts_ind]["top_n_searching_res"][0][0]]
                 true_label = data_label[ts_ind]
                 acc_list.append(one_nn_label == true_label)
 
@@ -294,8 +442,3 @@ if __name__ == "__main__":
             np.mean(precent_early_stop_puring)))
         print("[INFO] DTW Computed precent: {:.5f}%\n".format(
             np.mean(precent_dtw)))
-
-    # file_processor = LoadSave()
-    # new_file_name = ".//data_tmp//" + target_dataset_name + "_ucrdtw_searching_res.pkl"
-    # file_processor.save_data(path=new_file_name,
-    #                           data=experiment_total_res)

@@ -98,17 +98,17 @@ if __name__ == "__main__":
     DATA_PATH = ".//data//"
 
     # human_activity_recognition, heartbeat_mit, heartbeat_ptbdb
-    TARGET_DATASET_NAME = "human_activity_recognition"
-    USE_LB_KIM = False
+    TARGET_DATASET_NAME = "heartbeat_ptbdb"
+    USE_LB_KIM = True
     CHECK_1NN_ACC = True
-    NORM_TS = False
-    SAVE_EXPERIMENT_RESULTS = False
+    NORM_TS = True
+    SAVE_EXPERIMENT_RESULTS = True
     ###########################################################################
 
     # Loading all dataset with key word: TARGET_DATASET_NAME
     dataset_names = os.listdir(DATA_PATH)
     dataset_names = [name for name in dataset_names if TARGET_DATASET_NAME in name]
-    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))[-1:]
+    dataset_names = sorted(dataset_names, key=lambda s: int(s.split("_")[-1][:-4]))
 
     dataset = [load_data(DATA_PATH+name) for name in dataset_names]
     raw_dataset = [item[0] for item in dataset]

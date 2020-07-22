@@ -43,6 +43,7 @@ def dist(x, y):
 def dist_float(x, y):
     return (x-y)*(x-y)
 
+
 @njit
 def dtw_ucrdtw(ts_x,
                ts_y,
@@ -81,7 +82,6 @@ def dtw_ucrdtw(ts_x,
     l1, l2 = ts_x.shape[0], ts_y.shape[0]
     cum_sum = np.full((l1+1, l2+1), np.inf)
     cum_sum[0, 0] = 0
-    bsf = bsf**2
 
     for i in prange(l1):
         row_min = np.inf
@@ -95,7 +95,7 @@ def dtw_ucrdtw(ts_x,
 
         if (i+1 < l1) and ((row_min + cb_cum[i+1]) > bsf):
             return None
-    return cum_sum[-1, -1]**0.5
+    return cum_sum[-1, -1]
 
 
 def lb_kim_hierarchy(ts_query, ts_candidate, bsf):
@@ -165,7 +165,7 @@ def lb_keogh_reverse_cumulative(cb, cb_cum):
     return cb_cum
 
 
-# @njit
+@njit
 def lb_keogh_cumulative(ts_query_index_order,
                         ts_query_lb,
                         ts_query_ub,
@@ -184,8 +184,8 @@ def lb_keogh_cumulative(ts_query_index_order,
         lb_keogh_dist += d
         ts_query_cb[ts_query_index_order[i]] = d
         if lb_keogh_dist > bsf:
-            return lb_keogh_dist**0.5, ts_query_cb
-    return lb_keogh_dist**0.5, ts_query_cb
+            return lb_keogh_dist, ts_query_cb
+    return lb_keogh_dist, ts_query_cb
 
 
 class LoadSave():
