@@ -155,7 +155,7 @@ def lb_keogh_cumulative(ts_query_ind_order,
                         ts_candidate,
                         bsf):
     """Reference can be seen in the source code of UCR_DTW(lb_keogh_cumulative)."""
-    lb_keogh_res = 0
+    lb_keogh_dist = 0
     for i in prange(len(ts_candidate)):
         d = 0
         if ts_candidate[ts_query_ind_order[i]] > ts_query_ub[ts_query_ind_order[i]]:
@@ -163,11 +163,11 @@ def lb_keogh_cumulative(ts_query_ind_order,
         elif ts_candidate[ts_query_ind_order[i]] < ts_query_lb[ts_query_ind_order[i]]:
             d = dist(ts_candidate[ts_query_ind_order[i]], ts_query_lb[ts_query_ind_order[i]])
 
-        lb_keogh_res += d
+        lb_keogh_dist += d
         ts_query_cb[ts_query_ind_order[i]] = d
-        if lb_keogh_res > bsf:
-            return lb_keogh_res, ts_query_cb
-    return lb_keogh_res, ts_query_cb
+        if lb_keogh_dist > bsf:
+            return lb_keogh_dist, ts_query_cb
+    return lb_keogh_dist, ts_query_cb
 
 
 def lb_kim_hierarchy(ts_query, ts_candidate, bsf):

@@ -159,7 +159,7 @@ def search_top_n_similar_ts(ts_query_compact=None,
             es_puring_count/len(data_compact) * 100,
             (1 - lb_kim_puring_count/len(data_compact) - lb_keogh_puring_count/len(data_compact) - lb_keogh_ec_puring_count/len(data_compact)) * 100))
 
-    # Sorted the results, exclude the first results(QUery itself)
+    # Sorted the results, exclude the first results(Query itself)
     min_heap = [[-item[0], item[1]] for item in min_heap]
     min_heap = sorted(min_heap, key=lambda x: x[0])[1:]
 
@@ -191,10 +191,10 @@ if __name__ == "__main__":
     BENCHMARK_DATA_PATH = ".//data_tmp//"
 
     # human_activity_recognition, heartbeat_mit, heartbeat_ptbdb
-    TARGET_DATASET_NAME = "heartbeat_mit"
-    BENCHMARK_DATASET_NAME = "heartbeat_mit_baseline_top_16"
+    TARGET_DATASET_NAME = "human_activity_recognition"
+    BENCHMARK_DATASET_NAME = "human_activity_recognition_baseline_top_16"
     CHECK_1NN_ACC = True
-    NORM_TS = True
+    NORM_TS = False
     SAVE_EXPERIMENT_RESULTS = False
     ENVELOPE_RADIUS = 20
     ###########################################################################
