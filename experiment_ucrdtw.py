@@ -14,7 +14,6 @@ import seaborn as sns
 from tslearn.metrics import dtw, lb_keogh, lb_envelope
 import _ucrdtw
 from utils import LoadSave, dtw_ucrdtw, lb_keogh_cumulative, lb_kim_hierarchy, lb_keogh_reverse_cumulative, dist
-from time import time
 from tqdm import tqdm
 import heapq as hq
 
